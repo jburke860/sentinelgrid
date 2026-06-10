@@ -1,0 +1,14 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  skeleton:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check project skeleton
+        run: sh scripts/dev-check.sh
+

@@ -1,0 +1,27 @@
+[
+  {
+    "device_id": "edge-ca-001",
+    "display_name": "Los Angeles Ridge Node 1",
+    "region": "southern-california",
+    "lat": 34.0522,
+    "lon": -118.2437,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-002",
+    "display_name": "Angeles Forest Node 2",
+    "region": "southern-california",
+    "lat": 34.2820,
+    "lon": -118.1750,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-003",
+    "display_name": "San Gabriel Wash Node 3",
+    "region": "southern-california",
+    "lat": 34.1260,
+    "lon": -117.8650,
+    "firmware_version": "0.1.0"
+  }
+]
+

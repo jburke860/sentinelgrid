@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: sentinelgrid-postgres
+    environment:
+      POSTGRES_DB: sentinelgrid
+      POSTGRES_USER: sentinelgrid
+      POSTGRES_PASSWORD: sentinelgrid
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinelgrid -d sentinelgrid"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: sentinelgrid-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  minio:
+    image: minio/minio:latest
+    container_name: sentinelgrid-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: sentinelgrid
+      MINIO_ROOT_PASSWORD: sentinelgrid123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:
+
