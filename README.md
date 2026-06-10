@@ -71,10 +71,3 @@ make infra-up
 
 `make infra-up` starts only free local services. It does not create any cloud resources.
 
-## Resume Positioning
-
-Use honest wording:
-
-> Built a local-first edge telemetry platform using C++ virtual sensor nodes, MQTT, FastAPI, PostgreSQL/PostGIS, Python anomaly scoring, Docker Compose, and a Next.js geospatial dashboard.
-
-Avoid claiming physical sensor integration unless real hardware is added later.
