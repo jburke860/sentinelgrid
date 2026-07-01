@@ -1,14 +1,17 @@
 "use client";
 
+import { REGION_BY_ID } from "@/lib/sim/fleet";
 import type { DeviceView } from "@/lib/sim/types";
 import { Panel, RiskBadge, StatusDot, fmtTime } from "./ui";
 
 export function DeviceTable({
   devices,
+  showRegion,
   selectedId,
   onSelect,
 }: {
   devices: DeviceView[];
+  showRegion: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -42,7 +45,14 @@ export function DeviceTable({
             >
               <td className="px-3 py-1.5">
                 <div className="font-medium text-ink">{d.displayName}</div>
-                <div className="font-mono text-[10px] text-ink-dim">{d.deviceId}</div>
+                <div className="font-mono text-[10px] text-ink-dim">
+                  {d.deviceId}
+                  {showRegion && (
+                    <span className="ml-1.5 rounded bg-panel-2 px-1 text-accent/80">
+                      {REGION_BY_ID.get(d.regionId)?.shortName}
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-2 py-1.5">
                 <StatusDot status={d.status} />

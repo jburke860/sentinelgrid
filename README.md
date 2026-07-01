@@ -50,22 +50,13 @@ MinIO raw archives
 Next.js dashboard ---> FastAPI query endpoints ---> PostgreSQL/PostGIS
 ```
 
-## First Milestone
+## Two Ways to Run It
 
-The first useful version should do this:
-
-1. Run the local infrastructure with Docker Compose.
-2. Publish synthetic telemetry from `edge-sim`.
-3. Ingest telemetry into Postgres/PostGIS.
-4. Score basic anomalies in the worker.
-5. Show devices, incidents, and time-series data in the dashboard.
-
-## Live Demo Dashboard
-
-`web/` contains the operator dashboard, runnable today as a fully in-browser
-demo: a deterministic simulation engine generates fleet telemetry matching the
-MQTT contract, scores anomalies, and drives the incident queue — no Docker or
-backend needed.
+**Hosted demo (sim mode).** `web/` is the operator dashboard, deployable as a
+static site with zero backend: a deterministic in-browser engine simulates 50
+virtual nodes across 9 US regions, scores anomalies with the same z-score
+model as the worker, and drives the incident queue. Baselines can anchor to
+real NWS/USGS observations baked in at build time and refreshed daily by CI.
 
 ```sh
 cd web
@@ -77,14 +68,41 @@ npm run build      # static export in web/out/ — deploy to any static host
 See `web/README.md` for deployment options (Vercel, Netlify, GitHub Pages, or
 a subpath of an existing site via `NEXT_PUBLIC_BASE_PATH`).
 
+**Full local stack (live mode).** The real pipeline: the C++ `edge-sim` fleet
+publisher → MQTT bridge → Mosquitto → FastAPI ingest → Postgres/PostGIS →
+Python worker scoring/incidents → the same dashboard pointed at the API.
+
+```sh
+make stack-up      # postgres + mosquitto + minio + api (:8000) + worker
+make bridge-run    # edge-sim fleet publisher piped into the MQTT bridge
+# dashboard against the live API:
+cd web && NEXT_PUBLIC_DATA_MODE=live NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+```
+
+API docs at http://localhost:8000/docs. `make stack-down` to stop.
+
+## Fleet
+
+50 virtual nodes in 9 regions (Southern California, Pacific Northwest, Desert
+Southwest, Colorado Front Range, Gulf Coast, Florida Peninsula, Mississippi
+Valley, Southern Plains, Northeast Corridor), each with region-appropriate
+hazard profiles: wildfire, flood, hurricane, extreme heat, tornado, winter
+storm, air quality. Devices are seeded from `db/seeds/devices.json`, which is
+the shared source of truth for the browser sim, the C++ publisher, and the
+database.
+
 ## Local Commands
 
 ```sh
 make check
-make edge-run
-make infra-config
-make infra-up
+make edge-run          # build and run the C++ fleet publisher (stdout NDJSON)
+make infra-up          # infra only: postgres, mosquitto, minio
+make stack-up          # infra + api + worker
+make bridge-run        # edge-sim | scripts/mqtt_bridge.py
+make api-test          # api unit tests
+make worker-test       # worker unit tests (scoring model)
 ```
 
-`make infra-up` starts only free local services. It does not create any cloud resources.
+`make infra-up`/`make stack-up` start only free local services. Nothing here
+creates cloud resources.
 

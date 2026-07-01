@@ -1,57 +1,54 @@
 # Web Dashboard
 
-Next.js operator dashboard for SentinelGrid, runnable as a fully self-contained
-browser demo: a deterministic simulation engine (`src/lib/sim/`) generates the
-same telemetry the C++ `edge-sim` publishes over MQTT — same payload fields,
-quality flags, risk levels, and incident lifecycle as the docs in `docs/`.
+Next.js operator console for SentinelGrid. It runs in two modes:
 
-Views:
+- **Sim mode (default)** — a deterministic simulation engine (`src/lib/sim/`)
+  generates the full national fleet in the browser: same payload fields,
+  quality flags, risk levels, and incident lifecycle as the platform docs in
+  `docs/`. Deploys as a static site with zero backend.
+- **Live mode** — polls the FastAPI backend (`api/`) instead:
+  `NEXT_PUBLIC_DATA_MODE=live NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev`
 
-- live fleet map (Leaflet + CARTO/OpenStreetMap tiles, risk-colored markers)
-- device health table
-- incident queue with operator actions (ack / investigate / resolve / dismiss)
-- time-series telemetry chart per node and metric
-- anomaly detail panel (z-score feature contributions, quality flags)
-- activity feed and scenario injection (wildfire plume, flash flood, node dropout)
+## Views
 
-## Develop
-
-```sh
-npm install
-npm run dev
-```
-
-## Build and deploy the static demo
-
-The app exports as a static site (`output: "export"`), so it deploys anywhere
-that serves files — no backend required.
-
-```sh
-npm run build
-# static site is in out/
-```
-
-Options:
-
-- **Vercel / Netlify**: point the project at `web/`, build command `npm run build`,
-  output directory `out`.
-- **GitHub Pages or a subpath of an existing website**: build with
-  `NEXT_PUBLIC_BASE_PATH=/sentinelgrid npm run build`, then upload `out/` to
-  that path.
-- **Any static host**: copy `out/` to your web root.
+- national overview map (region aggregates) with drill-down into 9 US regions
+  (Leaflet + CARTO/OpenStreetMap tiles)
+- device health table (50 nodes), incident queue with operator actions and
+  expandable incident detail (timeline + triggering-metric chart)
+- per-node telemetry charts for all six metrics
+- anomaly detail panel: z-score feature contributions, drift-quarantine
+  markers, quality flags
+- playback scrubber to review the last simulated hour
+- scenario injection (wildfire, flood, hurricane, heat, tornado, winter storm,
+  air quality, node dropout) with a cross-region autopilot
+- shareable URLs — selection lives in the hash, e.g. `/#r=gulf&d=edge-tx-026`
 
 ## Simulation notes
 
-- Seeded PRNG (`mulberry32`, seed 42) — the demo is repeatable, mirroring the
-  determinism requirement in `docs/ARCHITECTURE.md`.
-- Each real 1.5s tick advances 30s of simulated time; ~1h of history is
-  backfilled on load so charts start populated.
-- Autopilot cycles wildfire / flood / dropout scenarios; operators can also
-  inject them from the top bar.
-- Anomaly scoring is the same shape planned for the Python worker: per-metric
-  z-scores against expected baselines combined into fire/flood hazard scores,
-  mapped to `normal / watch / warning / critical`.
+- Seeded PRNG (seed 42): repeatable runs, mirroring `edge-sim`'s determinism
+  requirement. Each real 1.5 s tick advances 30 s of sim time; ~1 h of history
+  is backfilled on load.
+- Hazards are data-driven (`src/lib/sim/hazards.ts`): each is a weighted
+  combination of per-metric z-scores plus scenario deltas. Regions declare
+  which hazards apply (`src/lib/sim/fleet.ts`).
+- A slow EWMA rolling baseline per device/metric detects sensor drift and
+  quarantines drifting metrics from hazard scoring — data-quality issues don't
+  open hazard incidents.
+- **Real-data anchoring**: `scripts/fetch-live-data.mjs` pulls current NWS
+  weather and USGS stream-gauge observations per region into
+  `src/data/live-snapshot.json` (refreshed daily by
+  `.github/workflows/refresh-live-data.yml`). When enabled (default, "real
+  data" toggle in the top bar), sim baselines anchor to those observations.
 
-When the FastAPI backend is built out, the engine can be swapped for a data
-layer that polls the real query endpoints — the view components only consume
-the `SimSnapshot` shape in `src/lib/sim/types.ts`.
+## Develop / deploy
+
+```sh
+npm install
+npm run dev          # http://localhost:3000
+npm run build        # static export in out/
+```
+
+- **Vercel / Netlify**: project root `web/`, build `npm run build`, output `out`.
+- **Subpath of an existing site**: `NEXT_PUBLIC_BASE_PATH=/sentinelgrid npm run build`,
+  upload `out/` to that path.
+- **Any static host**: copy `out/` to the web root.

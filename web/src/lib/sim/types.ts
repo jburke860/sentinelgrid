@@ -27,7 +27,7 @@ export const METRIC_UNITS: Record<Metric, string> = {
   wind_speed_mps: "m/s",
 };
 
-export type DeviceKind = "ridge" | "forest" | "wash";
+export type DeviceKind = "ridge" | "forest" | "wash" | "coastal";
 export type DeviceStatus = "online" | "degraded" | "offline";
 export type RiskLevel = "normal" | "watch" | "warning" | "critical";
 export type IncidentStatus =
@@ -37,13 +37,42 @@ export type IncidentStatus =
   | "resolved"
   | "dismissed";
 export type IncidentSeverity = "watch" | "warning" | "critical";
-export type Hazard = "fire" | "flood";
-export type ScenarioKind = "wildfire" | "flood" | "dropout";
+
+export type HazardKind =
+  | "wildfire"
+  | "flood"
+  | "hurricane"
+  | "heat"
+  | "tornado"
+  | "winter_storm"
+  | "air_quality";
+
+export type ScenarioKind = HazardKind | "dropout";
+
+export interface RegionSpec {
+  id: string;
+  name: string;
+  shortName: string;
+  center: [number, number];
+  zoom: number;
+  hazards: HazardKind[];
+  /** Added to the shared diurnal temperature curve. */
+  tempOffset: number;
+  humidityBase: number;
+}
+
+export interface RegionView extends RegionSpec {
+  deviceCount: number;
+  online: number;
+  peakRisk: number;
+  peakLevel: RiskLevel;
+  openIncidents: number;
+}
 
 export interface DeviceSpec {
   deviceId: string;
   displayName: string;
-  region: string;
+  regionId: string;
   kind: DeviceKind;
   lat: number;
   lon: number;
@@ -54,6 +83,7 @@ export interface Contribution {
   metric: Metric;
   value: number;
   z: number;
+  quarantined: boolean;
 }
 
 export interface Reading {
@@ -68,6 +98,7 @@ export interface Reading {
   flags: string[];
   riskScore: number;
   riskLevel: RiskLevel;
+  topHazard: HazardKind;
   contributions: Contribution[];
 }
 
@@ -77,12 +108,17 @@ export interface DeviceView extends DeviceSpec {
   latest: Reading | null;
 }
 
+export interface IncidentTimelineEntry {
+  t: number;
+  message: string;
+}
+
 export interface Incident {
   id: number;
   incidentKey: string;
   status: IncidentStatus;
   severity: IncidentSeverity;
-  hazard: Hazard;
+  hazard: HazardKind;
   title: string;
   summary: string;
   openedAt: number;
@@ -92,7 +128,9 @@ export interface Incident {
   lon: number;
   deviceId: string;
   deviceName: string;
+  regionId: string;
   riskScore: number;
+  timeline: IncidentTimelineEntry[];
 }
 
 export interface LogEvent {
@@ -105,18 +143,52 @@ export interface LogEvent {
 export interface ScenarioState {
   kind: ScenarioKind;
   label: string;
+  regionId: string | null;
   targetIds: string[];
   ticks: number;
   duration: number;
 }
 
+export type IncidentAction = "acknowledge" | "investigate" | "resolve" | "dismiss";
+
+/**
+ * What the dashboard needs from a data source. Implemented by the in-browser
+ * SimEngine and by LiveEngine (polling the FastAPI backend).
+ */
+export interface DataEngine {
+  start(): void;
+  stop(): void;
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => SimSnapshot;
+  getSeries(deviceId: string): Reading[];
+  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events">;
+  setRunning(running: boolean): void;
+  setSpeed(speed: number): void;
+  setAutopilot(on: boolean): void;
+  setReplay(on: boolean): void;
+  trigger(kind: ScenarioKind, regionId: string | null): void;
+  reset(): void;
+  incidentAction(id: number, action: IncidentAction): void;
+}
+
+/** Real observations baked at build time, used to anchor sim baselines. */
+export interface LiveAnchor {
+  fetchedAt: string;
+  regions: Record<string, Partial<Record<Metric, number>>>;
+}
+
 export interface SimSnapshot {
+  mode: "sim" | "live";
   simTime: number;
+  historyStart: number;
   running: boolean;
   speed: number;
   autopilot: boolean;
+  replay: boolean;
+  liveAnchorAt: string | null;
   tick: number;
   scenario: ScenarioState | null;
+  regions: RegionView[];
   devices: DeviceView[];
   incidents: Incident[];
   events: LogEvent[];

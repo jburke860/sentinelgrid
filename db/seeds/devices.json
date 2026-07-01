@@ -2,7 +2,8 @@
   {
     "device_id": "edge-ca-001",
     "display_name": "Los Angeles Ridge Node 1",
-    "region": "southern-california",
+    "region": "socal",
+    "kind": "ridge",
     "lat": 34.0522,
     "lon": -118.2437,
     "firmware_version": "0.1.0"
@@ -10,18 +11,442 @@
   {
     "device_id": "edge-ca-002",
     "display_name": "Angeles Forest Node 2",
-    "region": "southern-california",
-    "lat": 34.2820,
-    "lon": -118.1750,
+    "region": "socal",
+    "kind": "forest",
+    "lat": 34.282,
+    "lon": -118.175,
     "firmware_version": "0.1.0"
   },
   {
     "device_id": "edge-ca-003",
     "display_name": "San Gabriel Wash Node 3",
-    "region": "southern-california",
-    "lat": 34.1260,
-    "lon": -117.8650,
+    "region": "socal",
+    "kind": "wash",
+    "lat": 34.126,
+    "lon": -117.865,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-004",
+    "display_name": "Topanga Canyon Node 4",
+    "region": "socal",
+    "kind": "ridge",
+    "lat": 34.094,
+    "lon": -118.601,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-005",
+    "display_name": "Verdugo Hills Node 5",
+    "region": "socal",
+    "kind": "ridge",
+    "lat": 34.211,
+    "lon": -118.286,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-006",
+    "display_name": "Sepulveda Basin Node 6",
+    "region": "socal",
+    "kind": "wash",
+    "lat": 34.172,
+    "lon": -118.482,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-007",
+    "display_name": "Whittier Narrows Node 7",
+    "region": "socal",
+    "kind": "wash",
+    "lat": 34.023,
+    "lon": -118.065,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-008",
+    "display_name": "Griffith Park Node 8",
+    "region": "socal",
+    "kind": "forest",
+    "lat": 34.1365,
+    "lon": -118.294,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-009",
+    "display_name": "Santa Anita Ridge Node 9",
+    "region": "socal",
+    "kind": "ridge",
+    "lat": 34.181,
+    "lon": -118.033,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ca-010",
+    "display_name": "Malibu Creek Node 10",
+    "region": "socal",
+    "kind": "wash",
+    "lat": 34.097,
+    "lon": -118.731,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-wa-011",
+    "display_name": "Cougar Mountain Node 11",
+    "region": "pnw",
+    "kind": "ridge",
+    "lat": 47.543,
+    "lon": -122.108,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-wa-012",
+    "display_name": "Snoqualmie Basin Node 12",
+    "region": "pnw",
+    "kind": "wash",
+    "lat": 47.53,
+    "lon": -121.825,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-or-013",
+    "display_name": "Forest Park Node 13",
+    "region": "pnw",
+    "kind": "forest",
+    "lat": 45.571,
+    "lon": -122.772,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-or-014",
+    "display_name": "Willamette Bank Node 14",
+    "region": "pnw",
+    "kind": "wash",
+    "lat": 45.478,
+    "lon": -122.669,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-wa-015",
+    "display_name": "Tiger Mountain Node 15",
+    "region": "pnw",
+    "kind": "forest",
+    "lat": 47.488,
+    "lon": -121.947,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-az-016",
+    "display_name": "South Mountain Node 16",
+    "region": "southwest",
+    "kind": "ridge",
+    "lat": 33.339,
+    "lon": -112.083,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-az-017",
+    "display_name": "Salt River Node 17",
+    "region": "southwest",
+    "kind": "wash",
+    "lat": 33.43,
+    "lon": -111.94,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-az-018",
+    "display_name": "Camelback Node 18",
+    "region": "southwest",
+    "kind": "ridge",
+    "lat": 33.515,
+    "lon": -111.962,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-az-019",
+    "display_name": "Catalina Foothills Node 19",
+    "region": "southwest",
+    "kind": "ridge",
+    "lat": 32.318,
+    "lon": -110.91,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-az-020",
+    "display_name": "Rillito Wash Node 20",
+    "region": "southwest",
+    "kind": "wash",
+    "lat": 32.275,
+    "lon": -110.975,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-co-021",
+    "display_name": "Flatirons Node 21",
+    "region": "rockies",
+    "kind": "ridge",
+    "lat": 39.988,
+    "lon": -105.293,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-co-022",
+    "display_name": "Boulder Creek Node 22",
+    "region": "rockies",
+    "kind": "wash",
+    "lat": 40.014,
+    "lon": -105.276,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-co-023",
+    "display_name": "Lookout Mountain Node 23",
+    "region": "rockies",
+    "kind": "ridge",
+    "lat": 39.732,
+    "lon": -105.238,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-co-024",
+    "display_name": "Mount Falcon Node 24",
+    "region": "rockies",
+    "kind": "forest",
+    "lat": 39.635,
+    "lon": -105.24,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-co-025",
+    "display_name": "Clear Creek Node 25",
+    "region": "rockies",
+    "kind": "wash",
+    "lat": 39.755,
+    "lon": -105.221,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-tx-026",
+    "display_name": "Buffalo Bayou Node 26",
+    "region": "gulf",
+    "kind": "wash",
+    "lat": 29.762,
+    "lon": -95.401,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-tx-027",
+    "display_name": "Galveston Bay Node 27",
+    "region": "gulf",
+    "kind": "coastal",
+    "lat": 29.552,
+    "lon": -94.986,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-tx-028",
+    "display_name": "Addicks Basin Node 28",
+    "region": "gulf",
+    "kind": "wash",
+    "lat": 29.802,
+    "lon": -95.63,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-la-029",
+    "display_name": "Lakefront Node 29",
+    "region": "gulf",
+    "kind": "coastal",
+    "lat": 30.03,
+    "lon": -90.062,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-la-030",
+    "display_name": "Bayou St. John Node 30",
+    "region": "gulf",
+    "kind": "wash",
+    "lat": 29.975,
+    "lon": -90.088,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-fl-031",
+    "display_name": "Biscayne Shore Node 31",
+    "region": "southeast",
+    "kind": "coastal",
+    "lat": 25.774,
+    "lon": -80.135,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-fl-032",
+    "display_name": "Little River Node 32",
+    "region": "southeast",
+    "kind": "wash",
+    "lat": 25.85,
+    "lon": -80.185,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-fl-033",
+    "display_name": "Everglades Edge Node 33",
+    "region": "southeast",
+    "kind": "wash",
+    "lat": 25.76,
+    "lon": -80.5,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-fl-034",
+    "display_name": "Tampa Bayshore Node 34",
+    "region": "southeast",
+    "kind": "coastal",
+    "lat": 27.891,
+    "lon": -82.48,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-fl-035",
+    "display_name": "Hillsborough River Node 35",
+    "region": "southeast",
+    "kind": "wash",
+    "lat": 28.029,
+    "lon": -82.436,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-mo-036",
+    "display_name": "Mississippi Confluence Node 36",
+    "region": "midwest",
+    "kind": "wash",
+    "lat": 38.81,
+    "lon": -90.12,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-mo-037",
+    "display_name": "Meramec Bank Node 37",
+    "region": "midwest",
+    "kind": "wash",
+    "lat": 38.463,
+    "lon": -90.53,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-il-038",
+    "display_name": "Cahokia Bottoms Node 38",
+    "region": "midwest",
+    "kind": "wash",
+    "lat": 38.57,
+    "lon": -90.07,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-tn-039",
+    "display_name": "Wolf River Node 39",
+    "region": "midwest",
+    "kind": "wash",
+    "lat": 35.18,
+    "lon": -89.9,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-mo-040",
+    "display_name": "Gateway Ridge Node 40",
+    "region": "midwest",
+    "kind": "ridge",
+    "lat": 38.64,
+    "lon": -90.23,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ok-041",
+    "display_name": "Canadian Valley Node 41",
+    "region": "plains",
+    "kind": "wash",
+    "lat": 35.41,
+    "lon": -97.64,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ok-042",
+    "display_name": "Moore Plains Node 42",
+    "region": "plains",
+    "kind": "ridge",
+    "lat": 35.339,
+    "lon": -97.487,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ok-043",
+    "display_name": "Norman Mesonet Node 43",
+    "region": "plains",
+    "kind": "ridge",
+    "lat": 35.236,
+    "lon": -97.464,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ks-044",
+    "display_name": "Arkansas Bend Node 44",
+    "region": "plains",
+    "kind": "wash",
+    "lat": 37.687,
+    "lon": -97.336,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ks-045",
+    "display_name": "Flint Hills Node 45",
+    "region": "plains",
+    "kind": "ridge",
+    "lat": 37.9,
+    "lon": -96.8,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ny-046",
+    "display_name": "Hudson Palisades Node 46",
+    "region": "northeast",
+    "kind": "ridge",
+    "lat": 40.855,
+    "lon": -73.955,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ny-047",
+    "display_name": "Jamaica Bay Node 47",
+    "region": "northeast",
+    "kind": "coastal",
+    "lat": 40.615,
+    "lon": -73.82,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-nj-048",
+    "display_name": "Meadowlands Node 48",
+    "region": "northeast",
+    "kind": "wash",
+    "lat": 40.785,
+    "lon": -74.07,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ma-049",
+    "display_name": "Charles Basin Node 49",
+    "region": "northeast",
+    "kind": "wash",
+    "lat": 42.358,
+    "lon": -71.085,
+    "firmware_version": "0.1.0"
+  },
+  {
+    "device_id": "edge-ma-050",
+    "display_name": "Blue Hills Node 50",
+    "region": "northeast",
+    "kind": "forest",
+    "lat": 42.212,
+    "lon": -71.114,
     "firmware_version": "0.1.0"
   }
 ]
-

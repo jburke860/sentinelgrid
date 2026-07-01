@@ -81,10 +81,17 @@ export function AnomalyPanel({
             </div>
             {reading.contributions.map((c) => {
               const width = Math.min(100, (Math.abs(c.z) / 8) * 100);
-              const hot = Math.abs(c.z) >= 3;
+              const hot = Math.abs(c.z) >= 3 && !c.quarantined;
               return (
-                <div key={c.metric} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-20 shrink-0 text-ink-dim">{METRIC_LABELS[c.metric]}</span>
+                <div
+                  key={c.metric}
+                  className={`flex items-center gap-2 text-[11px] ${c.quarantined ? "opacity-50" : ""}`}
+                  title={c.quarantined ? "Quarantined from scoring: rolling baseline indicates sensor drift" : undefined}
+                >
+                  <span className="w-20 shrink-0 text-ink-dim">
+                    {METRIC_LABELS[c.metric]}
+                    {c.quarantined && <span className="ml-1 text-watch">⚠</span>}
+                  </span>
                   <div className="h-1.5 flex-1 overflow-hidden rounded bg-panel-2">
                     <div
                       className="h-full rounded"

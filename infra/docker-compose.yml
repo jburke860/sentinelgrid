@@ -25,6 +25,35 @@ services:
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
+  api:
+    build:
+      context: ../api
+    container_name: sentinelgrid-api
+    environment:
+      DATABASE_URL: postgresql://sentinelgrid:sentinelgrid@postgres:5432/sentinelgrid
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
+  worker:
+    build:
+      context: ../worker
+    container_name: sentinelgrid-worker
+    environment:
+      DATABASE_URL: postgresql://sentinelgrid:sentinelgrid@postgres:5432/sentinelgrid
+      SCORE_INTERVAL_S: "10"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
   minio:
     image: minio/minio:latest
     container_name: sentinelgrid-minio

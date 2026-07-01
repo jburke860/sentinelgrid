@@ -5,12 +5,13 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import type { SimEngine } from "@/lib/sim/engine";
+import type { DataEngine } from "@/lib/sim/types";
 import { METRIC_LABELS, METRIC_UNITS, METRICS, type Metric } from "@/lib/sim/types";
 import { Panel } from "./ui";
 
@@ -28,11 +29,13 @@ export function TelemetryChart({
   deviceId,
   deviceName,
   tick,
+  viewTime,
 }: {
-  engine: SimEngine;
+  engine: DataEngine;
   deviceId: string | null;
   deviceName: string | null;
   tick: number;
+  viewTime: number | null;
 }) {
   const [metric, setMetric] = useState<Metric>("temperature_c");
 
@@ -85,6 +88,8 @@ export function TelemetryChart({
               <CartesianGrid stroke="#1e2a38" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="t"
+                type="number"
+                domain={["dataMin", "dataMax"]}
                 tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit" })}
                 tick={{ fill: "#7d8fa3", fontSize: 10, fontFamily: "var(--font-jetbrains)" }}
                 stroke="#1e2a38"
@@ -110,6 +115,9 @@ export function TelemetryChart({
                   METRIC_LABELS[metric],
                 ]}
               />
+              {viewTime !== null && (
+                <ReferenceLine x={viewTime} stroke="#38bdf8" strokeDasharray="4 3" />
+              )}
               <Area
                 type="monotone"
                 dataKey="value"
