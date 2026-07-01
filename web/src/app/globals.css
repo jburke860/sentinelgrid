@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-panel: #101720;
+  --color-panel-2: #0b1118;
+  --color-edge: #1e2a38;
+  --color-ink: #d7e1ec;
+  --color-ink-dim: #7d8fa3;
+  --color-accent: #38bdf8;
+  --color-ok: #34d399;
+  --color-watch: #fbbf24;
+  --color-warn: #fb923c;
+  --color-crit: #f87171;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+  background: #070b10;
+  color: var(--color-ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3a4d transparent;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0a0f14;
+  font: inherit;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #101720;
+  color: #d7e1ec;
+  border: 1px solid #1e2a38;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0.15;
+  }
+}
+
+.crit-pulse {
+  animation: pulse-ring 0.9s ease-in-out infinite alternate;
+}

@@ -60,6 +60,23 @@ The first useful version should do this:
 4. Score basic anomalies in the worker.
 5. Show devices, incidents, and time-series data in the dashboard.
 
+## Live Demo Dashboard
+
+`web/` contains the operator dashboard, runnable today as a fully in-browser
+demo: a deterministic simulation engine generates fleet telemetry matching the
+MQTT contract, scores anomalies, and drives the incident queue — no Docker or
+backend needed.
+
+```sh
+cd web
+npm install
+npm run dev        # local dev at http://localhost:3000
+npm run build      # static export in web/out/ — deploy to any static host
+```
+
+See `web/README.md` for deployment options (Vercel, Netlify, GitHub Pages, or
+a subpath of an existing site via `NEXT_PUBLIC_BASE_PATH`).
+
 ## Local Commands
 
 ```sh
