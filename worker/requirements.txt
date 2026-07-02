@@ -2,4 +2,4 @@ psycopg[binary]==3.2.3
 pytest==8.3.4
 scikit-learn>=1.5
 numpy>=1.26
-minio>=7.2
+minio>=7.2.20
