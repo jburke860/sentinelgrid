@@ -20,10 +20,18 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: sentinelgrid-mosquitto
+    # Copy the checked-in password hash to a path with permissions mosquitto
+    # accepts (bind mounts don't translate file modes reliably on macOS).
+    command: >
+      sh -c "cp /mosquitto/config/passwd.src /mosquitto/passwd
+      && chown mosquitto:mosquitto /mosquitto/passwd
+      && chmod 600 /mosquitto/passwd
+      && exec mosquitto -c /mosquitto/config/mosquitto.conf"
     ports:
       - "1883:1883"
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd.src:ro
 
   api:
     build:
@@ -33,6 +41,10 @@ services:
       DATABASE_URL: postgresql://sentinelgrid:sentinelgrid@postgres:5432/sentinelgrid
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
+      MQTT_USERNAME: sentinelgrid
+      MQTT_PASSWORD: sentinelgrid
+      # Uncomment to require X-API-Key on write endpoints:
+      # SENTINELGRID_API_KEY: change-me
     ports:
       - "8000:8000"
     depends_on:
@@ -48,10 +60,18 @@ services:
     environment:
       DATABASE_URL: postgresql://sentinelgrid:sentinelgrid@postgres:5432/sentinelgrid
       SCORE_INTERVAL_S: "10"
+      SENTINELGRID_RETENTION_DAYS: "7"
+      SENTINELGRID_MAINTENANCE_INTERVAL_S: "300"
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: sentinelgrid
+      MINIO_SECRET_KEY: sentinelgrid123
+      MINIO_BUCKET: sentinelgrid-raw
     depends_on:
       postgres:
         condition: service_healthy
       mosquitto:
+        condition: service_started
+      minio:
         condition: service_started
 
   minio:

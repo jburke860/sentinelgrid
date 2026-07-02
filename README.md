@@ -2,6 +2,17 @@
 
 SentinelGrid is a local-first edge telemetry platform for climate-risk monitoring. It uses virtual sensor nodes instead of physical hardware, then builds the same kind of software surface a real system would need: MQTT ingestion, geospatial storage, anomaly scoring, data-quality checks, and an operator dashboard.
 
+**Live demo:** [sentinelgrid-two.vercel.app](https://sentinelgrid-two.vercel.app) · created by Jeremy Burke
+
+![SentinelGrid operator dashboard (light theme)](docs/images/dashboard-light.png)
+
+<details>
+<summary>Dark theme</summary>
+
+![SentinelGrid operator dashboard (dark theme)](docs/images/dashboard-dark.png)
+
+</details>
+
 The project is intentionally designed around free tools:
 
 - C++ edge-device simulator
@@ -80,6 +91,55 @@ cd web && NEXT_PUBLIC_DATA_MODE=live NEXT_PUBLIC_API_URL=http://localhost:8000 n
 ```
 
 API docs at http://localhost:8000/docs. `make stack-down` to stop.
+
+The broker requires authentication (dev credentials `sentinelgrid` /
+`sentinelgrid`, hashed in `infra/mosquitto/passwd`; regenerate with
+`make mosquitto-passwd`). The bridge and API pick them up from
+`MQTT_USERNAME` / `MQTT_PASSWORD` (same defaults).
+
+### API extras
+
+- `GET /stream` — Server-Sent Events; a `snapshot` event (same shape as
+  `/snapshot`) every ~2s (`SENTINELGRID_STREAM_INTERVAL_S`).
+- `GET /metrics` — Prometheus metrics: ingest counters (HTTP + MQTT), HTTP
+  request counts, and scoring lag.
+- Optional auth: set `SENTINELGRID_API_KEY` and the write endpoints
+  (`POST /ingest/telemetry`, `PATCH /incidents/{id}`) require a matching
+  `X-API-Key` header. Reads stay open.
+- Rate limiting: per-client-IP sliding window,
+  `SENTINELGRID_RATE_LIMIT_PER_MIN` (default 600, `/health` exempt).
+- JSON logs: `SENTINELGRID_LOG_JSON=1` (API and worker).
+
+### Worker jobs
+
+Every cycle: z-score scoring (against learned per-device baselines once a
+device/metric has 300+ normal samples — see `device_baselines`), an
+IsolationForest second opinion stored in `anomaly_scores.model_scores`,
+incident lifecycle, and sequence data-quality checks. Every
+`SENTINELGRID_MAINTENANCE_INTERVAL_S` (default 300s): hourly rollups into
+`telemetry_rollup_1h`, raw-telemetry retention
+(`SENTINELGRID_RETENTION_DAYS`, default 7, `0` disables), and gzipped-NDJSON
+archival to MinIO recorded in `raw_archives` with sha256 checksums.
+
+Backtest the scoring models against labeled anomaly windows:
+
+```sh
+make backtest      # sample data in worker/data/
+```
+
+### Database migrations
+
+Fresh compose volumes bootstrap from `infra/db/init/*.sql`. Existing
+databases evolve with Alembic (`db/alembic/`, DSN from `DATABASE_URL`):
+
+```sh
+make db-stamp      # once, on a DB bootstrapped by the init scripts
+make db-upgrade    # apply new revisions
+make db-revision m="add foo table"
+```
+
+New DDL lands in both places: an idempotent `infra/db/init/NNN_*.sql` for
+fresh volumes and a matching Alembic revision for existing databases.
 
 ## Fleet
 

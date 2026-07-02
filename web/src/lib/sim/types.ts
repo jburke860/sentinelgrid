@@ -59,6 +59,8 @@ export interface RegionSpec {
   /** Added to the shared diurnal temperature curve. */
   tempOffset: number;
   humidityBase: number;
+  /** Annual temperature swing: how much colder midwinter runs than midsummer. */
+  seasonalAmp: number;
 }
 
 export interface RegionView extends RegionSpec {
@@ -141,12 +143,38 @@ export interface LogEvent {
 }
 
 export interface ScenarioState {
+  id: number;
   kind: ScenarioKind;
   label: string;
   regionId: string | null;
+  /** Devices taken offline by a dropout scenario. */
   targetIds: string[];
   ticks: number;
   duration: number;
+  /** Current storm center; moving systems travel across the region. */
+  epicenter: [number, number] | null;
+  moving: boolean;
+}
+
+/** A scripted multi-step event replay (see storylines.ts). */
+export interface StorylineStep {
+  atTick: number;
+  kind: ScenarioKind;
+  regionId: string;
+}
+
+export interface StorylineSpec {
+  id: string;
+  label: string;
+  blurb: string;
+  steps: StorylineStep[];
+}
+
+export interface StorylineState {
+  id: string;
+  label: string;
+  firedSteps: number;
+  totalSteps: number;
 }
 
 export type IncidentAction = "acknowledge" | "investigate" | "resolve" | "dismiss";
@@ -167,6 +195,7 @@ export interface DataEngine {
   setAutopilot(on: boolean): void;
   setReplay(on: boolean): void;
   trigger(kind: ScenarioKind, regionId: string | null): void;
+  playStoryline(id: string | null): void;
   reset(): void;
   incidentAction(id: number, action: IncidentAction): void;
 }
@@ -187,7 +216,8 @@ export interface SimSnapshot {
   replay: boolean;
   liveAnchorAt: string | null;
   tick: number;
-  scenario: ScenarioState | null;
+  scenarios: ScenarioState[];
+  storyline: StorylineState | null;
   regions: RegionView[];
   devices: DeviceView[];
   incidents: Incident[];

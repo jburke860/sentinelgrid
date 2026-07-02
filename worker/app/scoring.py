@@ -28,10 +28,16 @@ RISK_LEVELS = (
 )
 
 
-def compute_zscores(values: dict[str, Any]) -> dict[str, float]:
-    """Z-score each known metric; missing/None metrics contribute 0."""
+def compute_zscores(
+    values: dict[str, Any],
+    baselines: dict[str, tuple[float, float]] | None = None,
+) -> dict[str, float]:
+    """Z-score each known metric; missing/None metrics contribute 0.
+
+    `baselines` overrides the hardcoded defaults (learned per-device stats).
+    """
     z: dict[str, float] = {}
-    for metric, (mean, std) in BASELINES.items():
+    for metric, (mean, std) in (baselines or BASELINES).items():
         value = values.get(metric)
         z[metric] = 0.0 if value is None else (float(value) - mean) / std
     return z
@@ -70,13 +76,16 @@ def risk_level(score: int) -> str:
     return "normal"
 
 
-def score_reading(values: dict[str, Any]) -> dict[str, Any]:
+def score_reading(
+    values: dict[str, Any],
+    baselines: dict[str, tuple[float, float]] | None = None,
+) -> dict[str, Any]:
     """Score one reading's metric values.
 
     Returns risk_score (0-100), risk_level, top hazard, plus the z-scores
     (features) and an explanation payload for anomaly_scores.
     """
-    z = compute_zscores(values)
+    z = compute_zscores(values, baselines)
     hazards = hazard_scores(z)
     ranked = sorted(hazards.items(), key=lambda kv: kv[1], reverse=True)
     top_hazard, top_value = ranked[0]

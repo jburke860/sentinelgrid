@@ -10,6 +10,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["wildfire", "flood"],
     tempOffset: 0,
     humidityBase: 28,
+    seasonalAmp: 7,
   },
   {
     id: "pnw",
@@ -20,6 +21,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["wildfire", "flood"],
     tempOffset: -6,
     humidityBase: 55,
+    seasonalAmp: 9,
   },
   {
     id: "southwest",
@@ -30,6 +32,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["heat", "wildfire"],
     tempOffset: 12,
     humidityBase: 15,
+    seasonalAmp: 11,
   },
   {
     id: "rockies",
@@ -40,6 +43,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["wildfire", "winter_storm"],
     tempOffset: -4,
     humidityBase: 30,
+    seasonalAmp: 12,
   },
   {
     id: "gulf",
@@ -50,6 +54,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["hurricane", "flood"],
     tempOffset: 6,
     humidityBase: 65,
+    seasonalAmp: 9,
   },
   {
     id: "southeast",
@@ -60,6 +65,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["hurricane", "flood"],
     tempOffset: 8,
     humidityBase: 70,
+    seasonalAmp: 7,
   },
   {
     id: "midwest",
@@ -70,6 +76,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["flood", "tornado"],
     tempOffset: 0,
     humidityBase: 50,
+    seasonalAmp: 14,
   },
   {
     id: "plains",
@@ -80,6 +87,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["tornado", "heat"],
     tempOffset: 2,
     humidityBase: 40,
+    seasonalAmp: 13,
   },
   {
     id: "northeast",
@@ -90,6 +98,7 @@ export const REGIONS: RegionSpec[] = [
     hazards: ["winter_storm", "flood", "air_quality"],
     tempOffset: -5,
     humidityBase: 50,
+    seasonalAmp: 13,
   },
 ];
 

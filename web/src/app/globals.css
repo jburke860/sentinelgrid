@@ -1,59 +1,188 @@
 @import "tailwindcss";
 
 @theme {
-  --color-panel: #101720;
-  --color-panel-2: #0b1118;
-  --color-edge: #1e2a38;
-  --color-ink: #d7e1ec;
-  --color-ink-dim: #7d8fa3;
-  --color-accent: #38bdf8;
+  /* Light theme (default) keyed to the SentinelGrid mark: deep navy + cyan.
+     Dark theme overrides the same variables under [data-theme="dark"]. */
+  --color-bg: #eef2f6;
+  --color-panel: #ffffff;
+  --color-panel-2: #f1f5f9;
+  --color-edge: #d9e2ec;
+  --color-edge-soft: #e7edf3;
+  --color-ink: #16283e;
+  --color-ink-dim: #5b6b7f;
+  --color-brand: #0b1a30;
+  --color-accent: #0891b2;
+  --color-ok: #059669;
+  --color-watch: #d97706;
+  --color-warn: #ea580c;
+  --color-crit: #dc2626;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #0a1220;
+  --color-panel: #101b2b;
+  --color-panel-2: #1a2739;
+  --color-edge: #263850;
+  --color-edge-soft: #1e2e43;
+  --color-ink: #dfe8f3;
+  --color-ink-dim: #8598ae;
+  --color-brand: #e8f1fa;
+  --color-accent: #38d0f0;
   --color-ok: #34d399;
   --color-watch: #fbbf24;
   --color-warn: #fb923c;
   --color-crit: #f87171;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
-  --font-sans: var(--font-inter), system-ui, sans-serif;
 }
 
 html,
 body {
   height: 100%;
-  background: #070b10;
+  background: var(--color-bg);
   color: var(--color-ink);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a3a4d transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-ink-dim) 40%, transparent) transparent;
 }
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-ink-dim) 40%, transparent);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 60%, transparent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* Numbers line up in tables and stat pills. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- range input (playback scrubber) ---- */
+
+input[type="range"].scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-edge);
+  cursor: pointer;
+}
+
+input[type="range"].scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-panel);
+  box-shadow: 0 1px 3px rgba(11, 26, 48, 0.35);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"].scrubber::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+input[type="range"].scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-panel);
+}
+
+/* ---- leaflet ---- */
 
 .leaflet-container {
   height: 100%;
   width: 100%;
-  background: #0a0f14;
+  background: var(--color-bg);
   font: inherit;
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #101720;
-  color: #d7e1ec;
-  border: 1px solid #1e2a38;
+  background: var(--color-panel);
+  color: var(--color-ink);
+  border: 1px solid var(--color-edge);
+  box-shadow: 0 8px 24px rgba(11, 26, 48, 0.25);
 }
 
 .leaflet-popup-content {
   margin: 10px 12px;
 }
 
+.leaflet-container .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--color-panel) 78%, transparent);
+  color: var(--color-ink-dim);
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--color-ink-dim);
+}
+
+/* ---- animation ---- */
+
 @keyframes pulse-ring {
   0% {
-    opacity: 0.7;
+    opacity: 0.75;
   }
   100% {
-    opacity: 0.15;
+    opacity: 0.25;
   }
 }
 
 .crit-pulse {
   animation: pulse-ring 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.18s ease-out;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
 }

@@ -43,7 +43,16 @@ Responsibilities:
 - Validate payloads.
 - Store readings in PostgreSQL/PostGIS.
 - Serve dashboard queries for device state, incidents, time-series data, and map markers.
+- Push live snapshots over Server-Sent Events (`GET /stream`).
+- Track device presence from retained status topics and publish incident
+  commands back to devices.
+- Enforce optional API-key auth on writes and per-IP rate limits; expose
+  Prometheus metrics at `GET /metrics`.
 - Expose OpenAPI docs for portfolio review.
+
+Schema changes ship two ways: idempotent `infra/db/init/*.sql` scripts
+bootstrap fresh compose volumes, and matching Alembic revisions
+(`db/alembic/`) upgrade existing databases.
 
 ### Database
 
@@ -63,10 +72,17 @@ The worker runs Python jobs.
 Responsibilities:
 
 - Pull or replay public data sources.
-- Run anomaly scoring.
+- Run anomaly scoring: a z-score hazard model (driving incidents) against
+  learned per-device baselines, plus an IsolationForest second opinion
+  stored alongside each score (bootstrapped on synthetic samples, then
+  periodically refit on recent low-risk telemetry; provenance tracked).
+- Deliver webhook alerts for newly-opened incidents
+  (`SENTINELGRID_WEBHOOK_URL`, optional Slack formatting).
 - Run data-quality checks.
-- Archive raw source files to MinIO.
+- Maintain hourly rollups and prune raw telemetry past the retention window.
+- Archive raw telemetry batches to MinIO with checksums (`raw_archives`).
 - Backfill derived incident records.
+- Backtest the models against labeled anomaly windows (`app/backtest.py`).
 
 Start with plain Python jobs. Add Dagster, Airflow, or dbt after the core platform works.
 

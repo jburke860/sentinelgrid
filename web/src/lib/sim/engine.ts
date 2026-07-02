@@ -1,6 +1,8 @@
+import { BASELINE_STD, expectedValues } from "./baselines";
 import { FLEET, REGION_BY_ID, REGIONS } from "./fleet";
 import { HAZARDS } from "./hazards";
 import { Rng } from "./rng";
+import { STORYLINE_BY_ID } from "./storylines";
 import {
   METRICS,
   METRIC_LABELS,
@@ -23,23 +25,23 @@ import {
   type ScenarioKind,
   type ScenarioState,
   type SimSnapshot,
+  type StorylineSpec,
 } from "./types";
 
 const TICK_REAL_MS = 1500;
 const TICK_SIM_MS = 30_000; // each tick advances 30s of sim time at 1x
-const HISTORY_CAP = 400;
+const HISTORY_CAP = 400; // fine-grained readings kept per device (~3.3h)
+const COARSE_EVERY = 10; // one downsampled reading per 5 sim-minutes...
+const COARSE_CAP = 288; // ...kept for ~24h, so the scrubber reaches back a day
 const BACKFILL_TICKS = 130; // ~1h of sim history so charts start populated
 const EWMA_ALPHA = 0.01; // slow rolling baseline for drift detection
+const MAX_CONCURRENT_SCENARIOS = 3; // one per region, up to three regions at once
 
-// Expected noise scale per metric, shared with the worker's scoring job.
-const BASELINE_STD: Record<Metric, number> = {
-  temperature_c: 3.5,
-  humidity_pct: 8,
-  pm25_ugm3: 6,
-  smoke_ppm: 1,
-  water_level_m: 0.15,
-  wind_speed_mps: 1.2,
-};
+interface ActiveScenario extends ScenarioState {
+  from: [number, number];
+  to: [number, number];
+  radius: number;
+}
 
 interface DeviceState {
   spec: DeviceSpec;
@@ -56,6 +58,7 @@ interface DeviceState {
   highRiskStreak: number;
   normalStreak: number;
   history: Reading[];
+  coarse: Reading[];
 }
 
 export type { IncidentAction };
@@ -65,7 +68,9 @@ export class SimEngine implements DataEngine {
   private devices: Map<string, DeviceState> = new Map();
   private incidents: Incident[] = [];
   private events: LogEvent[] = [];
-  private scenario: ScenarioState | null = null;
+  private scenarios: ActiveScenario[] = [];
+  private scenarioSeq = 0;
+  private storyline: { spec: StorylineSpec; startTick: number; fired: number } | null = null;
   private simTime: number;
   private tickCount = 0;
   private running = true;
@@ -124,7 +129,8 @@ export class SimEngine implements DataEngine {
     this.devices.clear();
     this.incidents = [];
     this.events = [];
-    this.scenario = null;
+    this.scenarios = [];
+    this.storyline = null;
     this.tickCount = 0;
     this.incidentSeq = 0;
     this.eventSeq = 0;
@@ -144,21 +150,31 @@ export class SimEngine implements DataEngine {
 
   getSnapshot = (): SimSnapshot => this.snapshot;
 
+  /** Fine-grained recent history preceded by 5-minute downsampled history. */
   getSeries(deviceId: string): Reading[] {
-    return this.devices.get(deviceId)?.history ?? [];
+    const d = this.devices.get(deviceId);
+    if (!d) return [];
+    const fineStart = d.history[0]?.t ?? Infinity;
+    const older = d.coarse.filter((r) => r.t < fineStart);
+    return older.length ? [...older, ...d.history] : d.history;
   }
 
   /** Historical view for the playback scrubber: state as of sim time t. */
   snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events"> {
     const devices: DeviceView[] = [...this.devices.values()].map((d) => {
+      const series = this.getSeries(d.spec.deviceId);
       let latest: Reading | null = null;
-      for (let i = d.history.length - 1; i >= 0; i--) {
-        if (d.history[i].t <= t) {
-          latest = d.history[i];
+      for (let i = series.length - 1; i >= 0; i--) {
+        if (series[i].t <= t) {
+          latest = series[i];
           break;
         }
       }
-      const stale = latest === null || t - latest.t > 3 * TICK_SIM_MS;
+      // Older history is downsampled to 5-minute buckets, so allow a wider
+      // gap before calling a node offline there.
+      const fineStart = d.history[0]?.t ?? Infinity;
+      const staleAfter = t >= fineStart ? 3 * TICK_SIM_MS : 2.5 * COARSE_EVERY * TICK_SIM_MS;
+      const stale = latest === null || t - latest.t > staleAfter;
       return {
         ...d.spec,
         status: stale ? "offline" : "online",
@@ -211,6 +227,24 @@ export class SimEngine implements DataEngine {
     this.publish();
   }
 
+  playStoryline(id: string | null) {
+    if (id === null) {
+      if (this.storyline) {
+        this.pushEvent("operator", `Event replay "${this.storyline.spec.label}" cancelled`);
+        this.storyline = null;
+      }
+      this.publish();
+      return;
+    }
+    const spec = STORYLINE_BY_ID.get(id);
+    if (!spec) return;
+    this.scenarios = []; // clear the stage for the scripted sequence
+    this.storyline = { spec, startTick: this.tickCount, fired: 0 };
+    this.autopilot = false;
+    this.pushEvent("operator", `Event replay started: ${spec.label}`);
+    this.publish();
+  }
+
   incidentAction(id: number, action: IncidentAction) {
     const inc = this.incidents.find((i) => i.id === id);
     if (!inc) return;
@@ -259,6 +293,7 @@ export class SimEngine implements DataEngine {
         highRiskStreak: 0,
         normalStreak: 0,
         history: [],
+        coarse: [],
       });
     }
   }
@@ -294,17 +329,28 @@ export class SimEngine implements DataEngine {
       };
     });
 
+    const fineTicks = Math.min(this.tickCount, HISTORY_CAP);
+    const coarseTicks = Math.min(Math.floor(this.tickCount / COARSE_EVERY), COARSE_CAP) * COARSE_EVERY;
+
     return {
       mode: "sim" as const,
       simTime: this.simTime,
-      historyStart: this.simTime - Math.min(this.tickCount, HISTORY_CAP) * TICK_SIM_MS,
+      historyStart: this.simTime - Math.max(fineTicks, coarseTicks) * TICK_SIM_MS,
       running: this.running,
       speed: this.speed,
       autopilot: this.autopilot,
       replay: this.replay,
       liveAnchorAt: this.anchor?.fetchedAt ?? null,
       tick: this.tickCount,
-      scenario: this.scenario ? { ...this.scenario } : null,
+      scenarios: this.scenarios.map((s) => ({ ...s })),
+      storyline: this.storyline
+        ? {
+            id: this.storyline.spec.id,
+            label: this.storyline.spec.label,
+            firedSteps: this.storyline.fired,
+            totalSteps: this.storyline.spec.steps.length,
+          }
+        : null,
       regions,
       devices: deviceViews,
       incidents: this.incidents.map((i) => ({ ...i, timeline: [...i.timeline] })).reverse(),
@@ -317,8 +363,13 @@ export class SimEngine implements DataEngine {
     if (this.events.length > 400) this.events.splice(0, this.events.length - 400);
   }
 
-  private startScenario(kind: ScenarioKind, regionId: string | null, source: "operator" | "autopilot") {
-    if (this.scenario) return;
+  /** Try to start a scenario; returns false if the stage is full or the region is busy. */
+  private startScenario(
+    kind: ScenarioKind,
+    regionId: string | null,
+    source: "operator" | "autopilot" | "storyline",
+  ): boolean {
+    if (this.scenarios.length >= MAX_CONCURRENT_SCENARIOS && source !== "storyline") return false;
 
     if (kind === "dropout") {
       const pool = FLEET.filter(
@@ -326,55 +377,71 @@ export class SimEngine implements DataEngine {
           (!regionId || d.regionId === regionId) &&
           this.devices.get(d.deviceId)!.status !== "offline",
       );
-      if (pool.length === 0) return;
+      if (pool.length === 0) return false;
       const target = this.rng.pick(pool);
       const state = this.devices.get(target.deviceId)!;
       state.offlineTicksLeft = this.rng.int(14, 22);
       state.status = "offline";
       this.pushEvent("device", `${target.displayName} stopped reporting (uplink lost)`);
-      this.scenario = {
+      this.scenarios.push({
+        id: ++this.scenarioSeq,
         kind,
         label: "Node dropout",
         regionId: target.regionId,
         targetIds: [target.deviceId],
         ticks: 0,
         duration: state.offlineTicksLeft,
-      };
-      return;
+        epicenter: null,
+        moving: false,
+        from: [0, 0],
+        to: [0, 0],
+        radius: 0,
+      });
+      return true;
     }
 
     const hazard = HAZARDS[kind];
-    // Pick a region that actually faces this hazard.
+    // Pick a region that faces this hazard and isn't already hosting a scenario.
+    const busy = new Set(this.scenarios.filter((s) => s.kind !== "dropout").map((s) => s.regionId));
     const candidates = REGIONS.filter(
-      (r) => r.hazards.includes(kind) && (!regionId || r.id === regionId),
+      (r) => r.hazards.includes(kind) && !busy.has(r.id) && (!regionId || r.id === regionId),
     );
     const region = candidates.length > 0 ? this.rng.pick(candidates) : null;
-    if (!region) return; // hazard not applicable to the requested region
+    if (!region) return false; // hazard not applicable or region busy
     const pool = FLEET.filter((d) => d.regionId === region.id);
-    const epicenter = this.rng.pick(pool);
-    const neighbors = pool
-      .filter((d) => d.deviceId !== epicenter.deviceId)
-      .map((d) => ({ d, dist: Math.hypot(d.lat - epicenter.lat, d.lon - epicenter.lon) }))
-      .sort((a, b) => a.dist - b.dist)
-      .slice(0, 2)
-      .map((n) => n.d.deviceId);
-    this.scenario = {
+    const origin = this.rng.pick(pool);
+    const from: [number, number] = [origin.lat, origin.lon];
+    // Moving systems travel roughly across the region: mirror the origin
+    // through the region center with a little jitter.
+    const to: [number, number] = hazard.moving
+      ? [
+          2 * region.center[0] - from[0] + this.rng.normal(0, 0.12),
+          2 * region.center[1] - from[1] + this.rng.normal(0, 0.12),
+        ]
+      : from;
+    this.scenarios.push({
+      id: ++this.scenarioSeq,
       kind,
       label: hazard.label,
       regionId: region.id,
-      targetIds: [epicenter.deviceId, ...neighbors],
+      targetIds: [],
       ticks: 0,
       duration: this.rng.int(hazard.durationTicks[0], hazard.durationTicks[1]),
-    };
+      epicenter: from,
+      moving: hazard.moving,
+      from,
+      to,
+      radius: hazard.radius,
+    });
     this.pushEvent(
       "scenario",
-      `${hazard.label} scenario started near ${epicenter.displayName}, ${region.name} (${source})`,
+      `${hazard.label} scenario started near ${origin.displayName}, ${region.name} (${source})`,
     );
+    return true;
   }
 
-  private scenarioEnvelope(): number {
-    if (!this.scenario) return 0;
-    const p = this.scenario.ticks / this.scenario.duration;
+  private envelope(s: ActiveScenario): number {
+    const p = s.ticks / s.duration;
     if (p < 0.3) return p / 0.3;
     if (p < 0.6) return 1;
     return Math.max(0, (1 - p) / 0.4);
@@ -382,33 +449,42 @@ export class SimEngine implements DataEngine {
 
   /** Expected baseline per metric for a region at time t (the "no anomaly" state). */
   private expectedValues(region: RegionSpec, t: number): Record<Metric, number> {
-    const anchor = this.replay ? this.anchor?.regions[region.id] : undefined;
-    const hour = new Date(t).getHours() + new Date(t).getMinutes() / 60;
-    const diurnal = 9 * Math.sin(((hour - 9) / 24) * 2 * Math.PI);
-    return {
-      temperature_c: anchor?.temperature_c !== undefined ? anchor.temperature_c + diurnal * 0.15 : 22 + region.tempOffset + diurnal,
-      humidity_pct: anchor?.humidity_pct ?? region.humidityBase,
-      pm25_ugm3: 16,
-      smoke_ppm: 2,
-      water_level_m: anchor?.water_level_m ?? 1.2,
-      wind_speed_mps: anchor?.wind_speed_mps ?? 4.5,
-    };
+    return expectedValues(region, t, this.replay ? this.anchor?.regions[region.id] : undefined);
   }
 
   private step() {
     this.tickCount++;
     this.simTime += TICK_SIM_MS;
 
-    if (this.scenario) {
-      this.scenario.ticks++;
-      if (this.scenario.ticks >= this.scenario.duration) {
-        if (this.scenario.kind !== "dropout") {
-          this.pushEvent("scenario", `${this.scenario.label} scenario dissipated`);
-        }
-        this.scenario = null;
-        this.nextAutopilotIn = this.rng.int(35, 60);
+    // Advance active scenarios; moving systems track across their region.
+    for (const s of [...this.scenarios]) {
+      s.ticks++;
+      if (s.ticks >= s.duration) {
+        this.scenarios.splice(this.scenarios.indexOf(s), 1);
+        if (s.kind !== "dropout") this.pushEvent("scenario", `${s.label} scenario dissipated`);
+        if (this.scenarios.length === 0) this.nextAutopilotIn = this.rng.int(35, 60);
+      } else if (s.moving && s.epicenter) {
+        const p = s.ticks / s.duration;
+        s.epicenter = [
+          s.from[0] + (s.to[0] - s.from[0]) * p,
+          s.from[1] + (s.to[1] - s.from[1]) * p,
+        ];
       }
-    } else if (this.autopilot) {
+    }
+
+    if (this.storyline) {
+      const { spec } = this.storyline;
+      const rel = this.tickCount - this.storyline.startTick;
+      while (this.storyline.fired < spec.steps.length && spec.steps[this.storyline.fired].atTick <= rel) {
+        const step = spec.steps[this.storyline.fired];
+        if (!this.startScenario(step.kind, step.regionId, "storyline")) break; // region busy — retry next tick
+        this.storyline.fired++;
+      }
+      if (this.storyline.fired >= spec.steps.length && this.scenarios.length === 0) {
+        this.pushEvent("scenario", `Event replay "${spec.label}" complete`);
+        this.storyline = null;
+      }
+    } else if (this.autopilot && this.scenarios.length < 2) {
       this.nextAutopilotIn--;
       if (this.nextAutopilotIn <= 0) {
         // Cycle through every region's hazards plus the occasional dropout so
@@ -418,16 +494,27 @@ export class SimEngine implements DataEngine {
         sequence.push({ kind: "dropout", regionId: null });
         const pick = sequence[this.autopilotCursor % sequence.length];
         this.autopilotCursor += this.rng.int(1, 3); // vary the order run-to-run
-        this.startScenario(pick.kind, pick.regionId, "autopilot");
+        this.nextAutopilotIn = this.startScenario(pick.kind, pick.regionId, "autopilot")
+          ? this.rng.int(25, 55)
+          : 5; // busy region — retry soon with the next pick
       }
     }
 
-    const env = this.scenarioEnvelope();
-    for (const state of this.devices.values()) this.stepDevice(state, env);
+    const byRegion = new Map<string, ActiveScenario[]>();
+    for (const s of this.scenarios) {
+      if (s.kind === "dropout" || !s.regionId) continue;
+      const list = byRegion.get(s.regionId) ?? [];
+      list.push(s);
+      byRegion.set(s.regionId, list);
+    }
+
+    for (const state of this.devices.values()) {
+      this.stepDevice(state, byRegion.get(state.region.id) ?? []);
+    }
     this.reconcileIncidents();
   }
 
-  private stepDevice(state: DeviceState, env: number) {
+  private stepDevice(state: DeviceState, acting: ActiveScenario[]) {
     const { spec, region } = state;
 
     if (state.offlineTicksLeft > 0) {
@@ -463,11 +550,20 @@ export class SimEngine implements DataEngine {
     }
 
     const expected = this.expectedValues(region, this.simTime);
-    const isTarget =
-      this.scenario && this.scenario.kind !== "dropout" && this.scenario.targetIds.includes(spec.deviceId);
-    const primary = isTarget && this.scenario!.targetIds[0] === spec.deviceId;
-    const intensity = isTarget ? env * (primary ? 1 : 0.45) : 0;
-    const deltas = isTarget ? HAZARDS[this.scenario!.kind as HazardKind].deltas : {};
+
+    // Scenario forcing: each active scenario contributes its metric deltas
+    // scaled by its lifecycle envelope and a gaussian falloff from its (possibly
+    // moving) epicenter, so events read as spatial fields, not flipped switches.
+    const scenarioDelta = {} as Record<Metric, number>;
+    for (const m of METRICS) scenarioDelta[m] = 0;
+    for (const s of acting) {
+      if (!s.epicenter) continue;
+      const dist = Math.hypot(spec.lat - s.epicenter[0], spec.lon - s.epicenter[1]);
+      const intensity = this.envelope(s) * Math.exp(-((dist / s.radius) ** 2));
+      if (intensity < 0.02) continue;
+      const deltas = HAZARDS[s.kind as HazardKind].deltas;
+      for (const m of METRICS) scenarioDelta[m] += (deltas[m] ?? 0) * intensity;
+    }
 
     const noise: Record<Metric, number> = {
       temperature_c: 1.2,
@@ -488,7 +584,7 @@ export class SimEngine implements DataEngine {
 
     const values = {} as Record<Metric, number>;
     for (const m of METRICS) {
-      let v = this.rng.normal(expected[m], noise[m]) + (deltas[m] ?? 0) * intensity;
+      let v = this.rng.normal(expected[m], noise[m]) + scenarioDelta[m];
       if (state.drift?.metric === m) v += state.drift.offset;
       values[m] = Math.max(floors[m], m === "humidity_pct" ? Math.min(100, v) : v);
     }
@@ -567,6 +663,25 @@ export class SimEngine implements DataEngine {
 
     state.history.push(reading);
     if (state.history.length > HISTORY_CAP) state.history.splice(0, state.history.length - HISTORY_CAP);
+
+    // Downsample into the coarse ring so the scrubber reaches back ~24h
+    // without holding every 30s reading in memory.
+    if (this.tickCount % COARSE_EVERY === 0) {
+      const window = state.history.slice(-COARSE_EVERY);
+      const avg = {} as Record<Metric, number>;
+      for (const m of METRICS) {
+        avg[m] = window.reduce((acc, r) => acc + r.values[m], 0) / window.length;
+      }
+      const peak = Math.max(...window.map((r) => r.riskScore));
+      state.coarse.push({
+        ...reading,
+        values: avg,
+        riskScore: peak,
+        riskLevel: peak >= 75 ? "critical" : peak >= 50 ? "warning" : peak >= 25 ? "watch" : "normal",
+      });
+      if (state.coarse.length > COARSE_CAP) state.coarse.splice(0, state.coarse.length - COARSE_CAP);
+    }
+
     state.lastSeenAt = this.simTime;
     state.status = state.batteryPct < 15 || state.rssiDbm < -90 ? "degraded" : "online";
 

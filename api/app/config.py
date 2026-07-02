@@ -22,3 +22,29 @@ def mqtt_port() -> int:
 
 def mqtt_enabled() -> bool:
     return os.environ.get("MQTT_INGEST_ENABLED", "1") not in ("0", "false", "no")
+
+
+def mqtt_username() -> str | None:
+    return os.environ.get("MQTT_USERNAME") or None
+
+
+def mqtt_password() -> str | None:
+    return os.environ.get("MQTT_PASSWORD") or None
+
+
+def api_key() -> str | None:
+    """When set, write endpoints require a matching X-API-Key header."""
+    return os.environ.get("SENTINELGRID_API_KEY") or None
+
+
+def rate_limit_per_min() -> int:
+    """Per-client-IP request budget per minute (0 disables limiting)."""
+    return int(os.environ.get("SENTINELGRID_RATE_LIMIT_PER_MIN", "600"))
+
+
+def stream_interval_s() -> float:
+    return float(os.environ.get("SENTINELGRID_STREAM_INTERVAL_S", "2.0"))
+
+
+def log_json() -> bool:
+    return os.environ.get("SENTINELGRID_LOG_JSON", "0") in ("1", "true", "yes")

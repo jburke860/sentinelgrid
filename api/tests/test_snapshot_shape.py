@@ -1,12 +1,12 @@
 """Snapshot shaping tests using fake DB rows (no DB required)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.serialize import epoch_ms, shape_snapshot
 
-OBSERVED = datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc)
-OPENED = datetime(2026, 7, 1, 11, 30, 0, tzinfo=timezone.utc)
+OBSERVED = datetime(2026, 7, 1, 12, 0, 0, tzinfo=UTC)
+OPENED = datetime(2026, 7, 1, 11, 30, 0, tzinfo=UTC)
 
 
 def device_row(**overrides):

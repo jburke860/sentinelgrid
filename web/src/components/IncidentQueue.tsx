@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Line, LineChart, ReferenceLine, ResponsiveContainer, YAxis } from "recharts";
+import { useMemo, useState } from "react";
+import { Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { HAZARDS } from "@/lib/sim/hazards";
-import type { DataEngine } from "@/lib/sim/types";
-import type { Incident } from "@/lib/sim/types";
+import type { DataEngine, HazardKind, Incident } from "@/lib/sim/types";
 import { METRIC_LABELS } from "@/lib/sim/types";
-import { IncidentStatusBadge, Panel, RISK_COLORS, SeverityBadge, fmtTime } from "./ui";
+import { HazardIcon } from "./icons";
+import { EmptyState, IncidentStatusBadge, Panel, RISK_COLORS, SeverityBadge, fmtTime } from "./ui";
 
 function ActionButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
@@ -31,7 +31,7 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
     .map((r) => ({ t: r.t, v: r.values[metric] }));
 
   return (
-    <div className="mt-1 space-y-2 rounded border border-edge/60 bg-panel-2/60 p-2">
+    <div className="mt-1 space-y-2 rounded-lg border border-edge-soft bg-panel-2/60 p-2">
       {series.length > 2 && (
         <div>
           <div className="mb-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">
@@ -40,12 +40,9 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
           <div className="h-16">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={series} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
                 <YAxis hide domain={["auto", "auto"]} />
-                <ReferenceLine
-                  x={series.findIndex((s) => s.t >= inc.openedAt)}
-                  stroke={RISK_COLORS[inc.severity]}
-                  strokeDasharray="3 3"
-                />
+                <ReferenceLine x={inc.openedAt} stroke={RISK_COLORS[inc.severity]} strokeDasharray="3 3" />
                 <Line
                   dataKey="v"
                   stroke={RISK_COLORS[inc.severity]}
@@ -73,48 +70,93 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
   );
 }
 
+type StatusFilter = "all" | "active" | "closed";
+
 export function IncidentQueue({
+  accent,
   engine,
   incidents,
   frozen,
   onSelectDevice,
 }: {
+  accent?: string;
   engine: DataEngine;
   incidents: Incident[];
   frozen: boolean;
   onSelectDevice: (id: string) => void;
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [hazardFilter, setHazardFilter] = useState<HazardKind | "all">("all");
+
   const active = incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed");
   const closed = incidents.filter((i) => i.status === "resolved" || i.status === "dismissed");
+
+  const hazardsPresent = useMemo(
+    () => [...new Set(incidents.map((i) => i.hazard))] as HazardKind[],
+    [incidents],
+  );
+
+  let visible =
+    statusFilter === "active" ? active : statusFilter === "closed" ? closed.slice(0, 30) : [...active, ...closed.slice(0, 8)];
+  if (hazardFilter !== "all") visible = visible.filter((i) => i.hazard === hazardFilter);
 
   return (
     <Panel
       title="Incident Queue"
+      accent={accent}
       right={
-        <span className="font-mono text-[11px] text-ink-dim">
-          {active.length} active · {closed.length} closed
-        </span>
+        <div className="flex items-center gap-1 font-mono text-[10px]">
+          {(["all", "active", "closed"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setStatusFilter(f)}
+              className={`rounded px-1.5 py-0.5 uppercase transition-colors ${
+                statusFilter === f ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
+              }`}
+            >
+              {f}
+              {f === "active" && active.length > 0 && <span className="ml-1 opacity-70">{active.length}</span>}
+            </button>
+          ))}
+          {hazardsPresent.length > 1 && (
+            <select
+              value={hazardFilter}
+              onChange={(e) => setHazardFilter(e.target.value as HazardKind | "all")}
+              className="rounded border border-edge bg-panel-2 px-1 py-0.5 text-[10px] text-ink-dim"
+              aria-label="Filter by hazard"
+            >
+              <option value="all">all hazards</option>
+              {hazardsPresent.map((h) => (
+                <option key={h} value={h}>
+                  {HAZARDS[h].label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       }
     >
-      {incidents.length === 0 && (
-        <div className="p-4 text-center text-xs text-ink-dim">
-          No incidents in view. Trigger a scenario from the top bar or wait for autopilot.
-        </div>
+      {visible.length === 0 && (
+        <EmptyState>
+          {incidents.length === 0
+            ? "No incidents in view. Trigger a scenario from the top bar or wait for autopilot."
+            : "No incidents match the current filters."}
+        </EmptyState>
       )}
-      <ul className="divide-y divide-edge/50">
-        {[...active, ...closed.slice(0, 8)].map((inc) => (
+      <ul className="divide-y divide-edge-soft/60">
+        {visible.map((inc) => (
           <li
             key={inc.id}
-            className="cursor-pointer space-y-1.5 px-3 py-2.5 hover:bg-panel-2/50"
+            className="cursor-pointer space-y-1.5 px-3 py-2.5 transition-colors hover:bg-panel-2/50"
             onClick={() => setExpandedId(expandedId === inc.id ? null : inc.id)}
           >
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] text-ink-dim">{inc.incidentKey}</span>
-              <span title={inc.hazard}>{HAZARDS[inc.hazard].icon}</span>
+              <span title={HAZARDS[inc.hazard].label}><HazardIcon kind={inc.hazard} size={14} /></span>
               <SeverityBadge severity={inc.severity} />
               <IncidentStatusBadge status={inc.status} />
-              <span className="ml-auto font-mono text-[11px] text-ink-dim">risk {inc.riskScore}</span>
+              <span className="tnum ml-auto font-mono text-[11px] text-ink-dim">risk {inc.riskScore}</span>
             </div>
             <button
               className="block text-left text-xs font-medium text-ink hover:text-accent"

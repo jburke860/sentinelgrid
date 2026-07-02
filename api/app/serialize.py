@@ -4,7 +4,7 @@ Kept free of DB imports so the dashboard payload shape is unit-testable.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -12,7 +12,7 @@ def epoch_ms(value: datetime | None) -> int | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     return int(value.timestamp() * 1000)
 
 

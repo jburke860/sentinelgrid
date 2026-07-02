@@ -3,20 +3,23 @@
 import { useState } from "react";
 import type { DeviceView, LogEvent } from "@/lib/sim/types";
 import { METRIC_LABELS, METRIC_UNITS } from "@/lib/sim/types";
+import { TriangleAlert } from "lucide-react";
 import { Panel, RISK_COLORS, RiskBadge, fmtTime } from "./ui";
 
 const EVENT_COLORS: Record<LogEvent["kind"], string> = {
-  scenario: "#f87171",
-  incident: "#fb923c",
-  device: "#38bdf8",
-  operator: "#a3e635",
-  system: "#7d8fa3",
+  scenario: "#ef4444",
+  incident: "#f97316",
+  device: "#0ea5e9",
+  operator: "#84cc16",
+  system: "#94a3b8",
 };
 
 export function AnomalyPanel({
+  accent,
   device,
   events,
 }: {
+  accent?: string;
   device: DeviceView | null;
   events: LogEvent[];
 }) {
@@ -26,6 +29,7 @@ export function AnomalyPanel({
   return (
     <Panel
       title={tab === "anomaly" ? "Anomaly Detail" : "Activity Feed"}
+      accent={accent}
       right={
         <div className="flex gap-1 font-mono text-[10px]">
           {(["anomaly", "activity"] as const).map((t) => (
@@ -90,14 +94,14 @@ export function AnomalyPanel({
                 >
                   <span className="w-20 shrink-0 text-ink-dim">
                     {METRIC_LABELS[c.metric]}
-                    {c.quarantined && <span className="ml-1 text-watch">⚠</span>}
+                    {c.quarantined && <TriangleAlert size={11} className="ml-1 inline-block text-watch" aria-hidden />}
                   </span>
                   <div className="h-1.5 flex-1 overflow-hidden rounded bg-panel-2">
                     <div
                       className="h-full rounded"
                       style={{
                         width: `${width}%`,
-                        background: hot ? RISK_COLORS[reading.riskLevel] : "#3b4c61",
+                        background: hot ? RISK_COLORS[reading.riskLevel] : "var(--color-edge)",
                       }}
                     />
                   </div>
@@ -106,7 +110,7 @@ export function AnomalyPanel({
                   </span>
                   <span
                     className="w-12 shrink-0 text-right font-mono"
-                    style={{ color: hot ? RISK_COLORS[reading.riskLevel] : "#7d8fa3" }}
+                    style={{ color: hot ? RISK_COLORS[reading.riskLevel] : "var(--color-ink-dim)" }}
                   >
                     z{c.z >= 0 ? "+" : ""}
                     {c.z.toFixed(1)}

@@ -6,3 +6,5 @@ psycopg-pool==3.2.4
 paho-mqtt==2.1.0
 httpx==0.28.1
 pytest==8.3.4
+prometheus-client>=0.20
+alembic>=1.13

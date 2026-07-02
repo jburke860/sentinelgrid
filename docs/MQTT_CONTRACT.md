@@ -14,11 +14,41 @@ Device status:
 sentinelgrid/v1/devices/{device_id}/status
 ```
 
+Device status messages are published retained so late subscribers see the
+current state; the bridge publishes `online` when it first sees a device and
+`offline` for each device on clean shutdown.
+
+Fleet status (bridge Last Will):
+
+```text
+sentinelgrid/v1/fleet/status
+```
+
+Retained `online`/`offline` plain-text payload. The broker publishes
+`offline` automatically if the fleet publisher dies uncleanly; consumers
+should then treat all simulated devices as offline.
+
 Incident commands:
 
 ```text
 sentinelgrid/v1/incidents/{incident_id}/commands
 ```
+
+Published by the API when an operator acts on an incident:
+
+```json
+{
+  "schema_version": "1.0",
+  "incident_id": 42,
+  "action": "acknowledge",
+  "status": "acknowledged",
+  "issued_at": "2026-07-02T16:45:00Z"
+}
+```
+
+The broker requires authentication (`allow_anonymous false`); local dev
+credentials are `sentinelgrid` / `sentinelgrid`
+(`infra/mosquitto/passwd`, regenerate with `make mosquitto-passwd`).
 
 ## Telemetry Payload
 

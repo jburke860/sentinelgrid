@@ -1,0 +1,12 @@
+# Lint config for the Python services (api/, worker/, scripts/).
+line-length = 100
+target-version = "py312"
+extend-exclude = ["web", "edge-sim", "db/alembic/versions"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# Long lines are tolerated where SQL/log strings read better unwrapped.
+ignore = ["E501"]
+
+[lint.isort]
+known-first-party = ["app"]

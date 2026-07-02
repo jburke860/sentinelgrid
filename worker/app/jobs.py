@@ -1,15 +1,27 @@
-"""Worker jobs: anomaly scoring, incident lifecycle, data quality."""
+"""Worker jobs: anomaly scoring, incident lifecycle, data quality, rollups."""
 from __future__ import annotations
 
 import logging
+import os
+from datetime import UTC, datetime
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from .scoring import MODEL_NAME, MODEL_VERSION, score_reading
+from . import alerts
+from . import baselines as bl
+from .scoring import BASELINES, MODEL_NAME, MODEL_VERSION, score_reading
 
 log = logging.getLogger("sentinelgrid.worker.jobs")
+
+# The IsolationForest second model is optional: the worker still runs (zscore
+# only) if scikit-learn is unavailable.
+try:
+    from . import iforest
+except ImportError:  # pragma: no cover
+    iforest = None
+    log.warning("scikit-learn unavailable; isolation-forest scoring disabled")
 
 SCORE_BATCH_LIMIT = 2000
 OPEN_STREAK = 2  # consecutive warning+ readings to open an incident
@@ -31,8 +43,50 @@ HAZARD_TITLES = {
 # Scoring
 # ---------------------------------------------------------------------------
 
+def _load_learned_baselines(cur, device_ids: list[str]) -> dict[str, dict[str, bl.Welford]]:
+    """device_id -> metric -> (sample_count, mean, m2)."""
+    if not device_ids:
+        return {}
+    cur.execute(
+        """
+        select device_id, metric, sample_count, mean, m2
+        from device_baselines
+        where device_id = any(%s)
+        """,
+        (device_ids,),
+    )
+    learned: dict[str, dict[str, bl.Welford]] = {}
+    for row in cur.fetchall():
+        learned.setdefault(row["device_id"], {})[row["metric"]] = (
+            row["sample_count"], row["mean"], row["m2"],
+        )
+    return learned
+
+
+def _persist_learned_baselines(cur, learned: dict[str, dict[str, bl.Welford]]) -> None:
+    for device_id, metrics in learned.items():
+        for metric, (count, mean, m2) in metrics.items():
+            cur.execute(
+                """
+                insert into device_baselines (device_id, metric, sample_count, mean, m2, updated_at)
+                values (%s, %s, %s, %s, %s, now())
+                on conflict (device_id, metric) do update
+                  set sample_count = excluded.sample_count,
+                      mean = excluded.mean,
+                      m2 = excluded.m2,
+                      updated_at = now()
+                """,
+                (device_id, metric, count, mean, m2),
+            )
+
+
 def score_new_readings(conn: psycopg.Connection) -> int:
-    """Score telemetry readings that have no anomaly_scores row yet."""
+    """Score telemetry readings that have no anomaly_scores row yet.
+
+    zscore-baseline (against learned per-device baselines once warm) drives
+    risk_score/risk_level and incidents; the isolation-forest score rides
+    along in model_scores. Normal-level readings feed the learned baselines.
+    """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
@@ -48,14 +102,21 @@ def score_new_readings(conn: psycopg.Connection) -> int:
             (SCORE_BATCH_LIMIT,),
         )
         rows = cur.fetchall()
+        learned = _load_learned_baselines(cur, sorted({r["device_id"] for r in rows}))
+        touched: dict[str, dict[str, bl.Welford]] = {}
+
         for row in rows:
-            result = score_reading(row)
+            device_learned = learned.setdefault(row["device_id"], {})
+            result = score_reading(row, bl.effective_baselines(device_learned))
+            model_scores = {}
+            if iforest is not None:
+                model_scores[iforest.MODEL_NAME] = iforest.score_reading(row)
             cur.execute(
                 """
                 insert into anomaly_scores (
                   reading_id, device_id, risk_score, risk_level,
-                  model_name, model_version, features, explanation
-                ) values (%s, %s, %s, %s, %s, %s, %s, %s)
+                  model_name, model_version, features, explanation, model_scores
+                ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     row["id"],
@@ -66,8 +127,21 @@ def score_new_readings(conn: psycopg.Connection) -> int:
                     MODEL_VERSION,
                     Jsonb(result["features"]),
                     Jsonb(result["explanation"]),
+                    Jsonb(model_scores),
                 ),
             )
+            # Only normal readings train the baseline, so anomalies can't
+            # drag it toward themselves.
+            if result["risk_level"] == "normal":
+                for metric in BASELINES:
+                    value = row.get(metric)
+                    if value is None:
+                        continue
+                    state = device_learned.get(metric, (0, 0.0, 0.0))
+                    device_learned[metric] = bl.welford_update(state, float(value))
+                touched[row["device_id"]] = device_learned
+
+        _persist_learned_baselines(cur, touched)
     conn.commit()
     return len(rows)
 
@@ -101,7 +175,7 @@ def manage_incidents(conn: psycopg.Connection) -> dict[str, int]:
     """Open, escalate, and auto-resolve incidents from recent scores."""
     opened = escalated = resolved = 0
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute("select device_id, display_name from devices order by device_id")
+        cur.execute("select device_id, display_name, region from devices order by device_id")
         devices = cur.fetchall()
 
         for device in devices:
@@ -151,6 +225,17 @@ def manage_incidents(conn: psycopg.Connection) -> dict[str, int]:
                         ),
                     )
                     opened += 1
+                    # Exactly once per incident: only the open path notifies.
+                    alerts.notify_incident({
+                        "incident_key": key,
+                        "severity": severity,
+                        "hazard": hazard,
+                        "title": title,
+                        "device_id": device_id,
+                        "region": device.get("region"),
+                        "risk_score": latest["risk_score"],
+                        "opened_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                    })
                 elif severity == "critical" and active["severity"] != "critical":
                     # --- escalate ---
                     cur.execute(
@@ -207,8 +292,114 @@ def flag_out_of_order(conn: psycopg.Connection) -> int:
     return flagged
 
 
+# ---------------------------------------------------------------------------
+# Rollups + retention
+# ---------------------------------------------------------------------------
+
+ROLLUP_WINDOW_HOURS = 48
+ROLLUP_METRICS = list(BASELINES)
+
+
+def rollup_hourly(conn: psycopg.Connection) -> int:
+    """Upsert hourly per-device rollups over the recent window (idempotent)."""
+    agg_cols = ", ".join(
+        f"avg({m}) as {m}_avg, min({m}) as {m}_min, max({m}) as {m}_max"
+        for m in ROLLUP_METRICS
+    )
+    insert_cols = ", ".join(
+        f"{m}_avg, {m}_min, {m}_max" for m in ROLLUP_METRICS
+    )
+    update_cols = ", ".join(
+        f"{c} = excluded.{c}"
+        for m in ROLLUP_METRICS
+        for c in (f"{m}_avg", f"{m}_min", f"{m}_max")
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            insert into telemetry_rollup_1h (device_id, bucket, reading_count, {insert_cols})
+            select device_id, date_trunc('hour', observed_at) as bucket, count(*), {agg_cols}
+            from telemetry_readings
+            where observed_at > now() - interval '{ROLLUP_WINDOW_HOURS} hours'
+            group by device_id, bucket
+            on conflict (device_id, bucket) do update
+              set reading_count = excluded.reading_count, {update_cols}
+            """
+        )
+        upserted = cur.rowcount
+    conn.commit()
+    return upserted
+
+
+def retention_days() -> int:
+    return int(os.environ.get("SENTINELGRID_RETENTION_DAYS", "7"))
+
+
+def prune_old_readings(conn: psycopg.Connection) -> int:
+    """Delete raw telemetry older than the retention window (0 disables).
+
+    anomaly_scores rows cascade; hourly rollups keep the history.
+    """
+    days = retention_days()
+    if days <= 0:
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(
+            "delete from telemetry_readings where observed_at < now() - make_interval(days => %s)",
+            (days,),
+        )
+        deleted = cur.rowcount
+    conn.commit()
+    return deleted
+
+
 def run_all(conn: psycopg.Connection) -> dict[str, object]:
     scored = score_new_readings(conn)
     incidents = manage_incidents(conn)
     flagged = flag_out_of_order(conn)
     return {"scored": scored, "incidents": incidents, "out_of_order_flagged": flagged}
+
+
+IFOREST_SAMPLE_LIMIT = 5000
+
+
+def retrain_iforest(conn: psycopg.Connection) -> dict[str, object] | None:
+    """Refit the IsolationForest on recent low-risk readings.
+
+    Only normal/watch-level readings are sampled so active events can't
+    poison the learned "normal" envelope; iforest.refit() keeps the current
+    model when there aren't enough samples yet.
+    """
+    if iforest is None:
+        return None
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            select tr.temperature_c, tr.humidity_pct, tr.pm25_ugm3,
+                   tr.smoke_ppm, tr.water_level_m, tr.wind_speed_mps
+            from telemetry_readings tr
+            join anomaly_scores a on a.reading_id = tr.id
+            where a.risk_level in ('normal', 'watch')
+            order by tr.observed_at desc
+            limit %s
+            """,
+            (IFOREST_SAMPLE_LIMIT,),
+        )
+        samples = cur.fetchall()
+    return iforest.refit(samples)
+
+
+def run_maintenance(conn: psycopg.Connection) -> dict[str, object]:
+    """Periodic (not every-cycle) jobs: rollups, retention, archival, refit."""
+    from . import archive  # local import: MinIO client is optional at runtime
+
+    rolled = rollup_hourly(conn)
+    pruned = prune_old_readings(conn)
+    archived = archive.archive_new_readings(conn)
+    iforest_info = retrain_iforest(conn)
+    return {
+        "rollup_upserts": rolled,
+        "pruned": pruned,
+        "archived": archived,
+        "iforest": iforest_info,
+    }

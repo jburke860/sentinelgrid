@@ -1,24 +1,24 @@
 """SentinelGrid API: telemetry ingestion + dashboard queries."""
 from __future__ import annotations
 
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from psycopg.rows import dict_row
 
-from . import config, db, mqtt_ingest, queries
+from . import config, db, logsetup, metrics, mqtt_ingest, queries, ratelimit
 from .ingest import store_telemetry
 from .schemas import IncidentAction, TelemetryPayload
 from .serialize import epoch_ms, shape_device, shape_incident, shape_snapshot
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s"
-)
+logsetup.configure()
 log = logging.getLogger("sentinelgrid.api")
 
 # Incident status lifecycle (docs/DATA_MODEL.md).
@@ -59,10 +59,44 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def limit_and_count(request: Request, call_next):
+    if not ratelimit.allow(request.client.host if request.client else "unknown", request.url.path):
+        response = Response(
+            content='{"detail":"rate limit exceeded"}',
+            status_code=429,
+            media_type="application/json",
+        )
+    else:
+        response = await call_next(request)
+    route = request.scope.get("route")
+    metrics.HTTP_REQUESTS.labels(
+        method=request.method,
+        path=route.path if route is not None else request.url.path,
+        status=str(response.status_code),
+    ).inc()
+    return response
+
+
+def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    """Write endpoints require X-API-Key when SENTINELGRID_API_KEY is set."""
+    expected = config.api_key()
+    if expected is not None and x_api_key != expected:
+        raise HTTPException(status_code=401, detail="invalid or missing API key")
+
+
 def _pool_or_503():
     if not db.pool_ready():
         raise HTTPException(status_code=503, detail="database not ready")
     return db.get_pool()
+
+
+def _build_snapshot(pool) -> dict[str, object]:
+    device_rows = queries.fetch_all(pool, queries.DEVICES_WITH_LATEST_SQL)
+    incident_rows = queries.fetch_all(
+        pool, queries.INCIDENTS_SQL, {"status": None, "limit": 200}
+    )
+    return shape_snapshot(device_rows, incident_rows, now_ms=int(time.time() * 1000))
 
 
 @app.get("/health")
@@ -70,14 +104,22 @@ def health() -> dict[str, object]:
     return {"status": "ok", "database": "ready" if db.pool_ready() else "connecting"}
 
 
-@app.post("/ingest/telemetry", status_code=202)
+@app.get("/metrics")
+def prometheus_metrics() -> Response:
+    body, content_type = metrics.render()
+    return Response(content=body, media_type=content_type)
+
+
+@app.post("/ingest/telemetry", status_code=202, dependencies=[Depends(require_api_key)])
 def ingest_telemetry(payload: TelemetryPayload) -> dict[str, object]:
     pool = _pool_or_503()
     try:
         reading_id = store_telemetry(pool, payload)
     except psycopg.Error as exc:
+        metrics.INGEST_FAILED.labels(source="http").inc()
         log.warning("http ingest failed: %s", exc)
         raise HTTPException(status_code=503, detail="database write failed") from exc
+    metrics.INGEST_TOTAL.labels(source="http").inc()
     return {"status": "accepted", "readingId": reading_id}
 
 
@@ -141,7 +183,7 @@ def list_incidents(
     return [shape_incident(row) for row in rows]
 
 
-@app.patch("/incidents/{incident_id}")
+@app.patch("/incidents/{incident_id}", dependencies=[Depends(require_api_key)])
 def update_incident(incident_id: int, body: IncidentAction) -> dict[str, object]:
     pool = _pool_or_503()
     allowed_from, target = TRANSITIONS[body.action]
@@ -175,14 +217,37 @@ def update_incident(incident_id: int, body: IncidentAction) -> dict[str, object]
                 """,
                 {"target": target, "id": incident_id},
             )
+    # Complete the MQTT contract: operator actions fan out as device commands.
+    mqtt_ingest.publish_incident_command(incident_id, body.action, target)
     return {"id": incident_id, "status": target}
 
 
 @app.get("/snapshot")
 def snapshot() -> dict[str, object]:
-    pool = _pool_or_503()
-    device_rows = queries.fetch_all(pool, queries.DEVICES_WITH_LATEST_SQL)
-    incident_rows = queries.fetch_all(
-        pool, queries.INCIDENTS_SQL, {"status": None, "limit": 200}
+    return _build_snapshot(_pool_or_503())
+
+
+@app.get("/stream")
+def stream() -> StreamingResponse:
+    """Server-Sent Events: a `snapshot` event every ~2s (heartbeats between)."""
+    interval = config.stream_interval_s()
+
+    def event_source():
+        yield ": sentinelgrid snapshot stream\n\n"
+        while True:
+            if db.pool_ready():
+                try:
+                    payload = json.dumps(_build_snapshot(db.get_pool()))
+                    yield f"event: snapshot\ndata: {payload}\n\n"
+                except Exception as exc:  # noqa: BLE001 - keep the stream alive
+                    log.warning("stream snapshot failed: %s", exc)
+                    yield ": snapshot unavailable\n\n"
+            else:
+                yield ": database not ready\n\n"
+            time.sleep(interval)
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-    return shape_snapshot(device_rows, incident_rows, now_ms=int(time.time() * 1000))

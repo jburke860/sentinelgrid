@@ -5,10 +5,16 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
+    "lucide-react": "^1.23.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -16,12 +22,17 @@
     "recharts": "^2.15.3"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.1.8",
     "@types/leaflet": "^1.9.17",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.20",
     "tailwindcss": "^4.1.8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.9"
   }
 }
