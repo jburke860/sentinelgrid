@@ -1,11 +1,16 @@
 "use client";
 
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { BASELINE_STD } from "@/lib/sim/baselines";
+import { REGION_BY_ID } from "@/lib/sim/fleet";
 import { HAZARDS } from "@/lib/sim/hazards";
 import type { DataEngine, DeviceView, HazardKind, Incident } from "@/lib/sim/types";
 import { METRIC_LABELS, METRIC_UNITS } from "@/lib/sim/types";
+
+const MiniMap = dynamic(() => import("./MiniMap"), { ssr: false });
 import { HazardIcon } from "./icons";
 import {
   EmptyState,
@@ -44,7 +49,18 @@ function ActionButton({ onClick, children }: { onClick: () => void; children: Re
   );
 }
 
-function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) {
+type DetailTab = "overview" | "impact" | "timeline";
+
+function IncidentDetail({
+  engine,
+  inc,
+  device,
+}: {
+  engine: DataEngine;
+  inc: Incident;
+  device: DeviceView | null;
+}) {
+  const [tab, setTab] = useState<DetailTab>("overview");
   const metric = HAZARDS[inc.hazard].terms[0].metric;
   const windowMs = 40 * 30_000;
   const series = engine
@@ -52,34 +68,115 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
     .filter((r) => r.t >= inc.openedAt - windowMs && r.t <= (inc.closedAt ?? inc.openedAt + windowMs))
     .map((r) => ({ t: r.t, v: r.values[metric] }));
 
+  // Observed vs model baseline for the hazard's signature metrics, from the
+  // device's current reading (baseline = value − z·σ, exact inversion).
+  const latest = device?.latest ?? null;
+  const baselineRows = HAZARDS[inc.hazard].terms.map((term) => {
+    const c = latest?.contributions.find((x) => x.metric === term.metric);
+    if (!c) return { metric: term.metric, observed: null as number | null, baseline: 0, z: 0 };
+    return {
+      metric: term.metric,
+      observed: c.value,
+      baseline: c.value - c.z * BASELINE_STD[term.metric],
+      z: c.z,
+    };
+  });
+
   return (
-    <div className="mt-1 space-y-2 rounded-lg border border-edge-soft bg-panel-2/60 p-2">
-      <p className="text-[11px] leading-snug text-ink-dim">{inc.summary}</p>
-      {series.length > 2 && (
-        <div>
-          <div className="mb-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">
-            {METRIC_LABELS[metric]} around incident
+    <div className="mt-1 space-y-2 rounded-lg border border-edge-soft bg-panel-2/60 p-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex gap-1 font-mono text-[9px]">
+        {(["overview", "impact", "timeline"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`rounded px-1.5 py-0.5 uppercase tracking-wider transition-colors ${
+              tab === t ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <>
+          <p className="text-[11px] leading-snug text-ink-dim">{inc.summary}</p>
+          {series.length > 2 && (
+            <div>
+              <div className="mb-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">
+                {METRIC_LABELS[metric]} around incident
+              </div>
+              <div className="h-16">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={series} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                    <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
+                    <YAxis hide domain={["auto", "auto"]} />
+                    <ReferenceLine x={inc.openedAt} stroke={RISK_COLORS[inc.severity]} strokeDasharray="3 3" />
+                    <Line
+                      dataKey="v"
+                      stroke={RISK_COLORS[inc.severity]}
+                      strokeWidth={1.5}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+          {latest && (
+            <div>
+              <div className="mb-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">
+                Observed vs model baseline (now)
+              </div>
+              <table className="w-full font-mono text-[10px]">
+                <thead>
+                  <tr className="text-left text-ink-dim/80">
+                    <th className="py-0.5 font-medium">Metric</th>
+                    <th className="py-0.5 text-right font-medium">Observed</th>
+                    <th className="py-0.5 text-right font-medium">Baseline</th>
+                    <th className="py-0.5 text-right font-medium">Δ (z)</th>
+                  </tr>
+                </thead>
+                <tbody className="tnum">
+                  {baselineRows.map((r) => (
+                    <tr key={r.metric} className="border-t border-edge-soft/60">
+                      <td className="py-0.5 text-ink-dim">{METRIC_LABELS[r.metric]}</td>
+                      <td className="py-0.5 text-right text-ink">
+                        {r.observed !== null ? `${r.observed.toFixed(1)} ${METRIC_UNITS[r.metric]}` : "—"}
+                      </td>
+                      <td className="py-0.5 text-right text-ink-dim">
+                        {r.observed !== null ? r.baseline.toFixed(1) : "—"}
+                      </td>
+                      <td
+                        className="py-0.5 text-right"
+                        style={{ color: Math.abs(r.z) >= 3 ? RISK_COLORS[inc.severity] : "var(--color-ink-dim)" }}
+                      >
+                        {r.observed !== null ? `${r.z >= 0 ? "+" : ""}${r.z.toFixed(1)}σ` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "impact" && (
+        <div className="space-y-2">
+          <p className="text-[11px] leading-snug text-ink/85">{HAZARDS[inc.hazard].impact}</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[10px] text-ink-dim">
+            <span>region: {REGION_BY_ID.get(inc.regionId)?.name ?? inc.regionId}</span>
+            <span>node: {inc.deviceName}</span>
+            {device?.locality && <span>near: {device.locality}</span>}
+            <span>peak risk: {inc.riskScore}</span>
           </div>
-          <div className="h-16">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={series} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
-                <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
-                <YAxis hide domain={["auto", "auto"]} />
-                <ReferenceLine x={inc.openedAt} stroke={RISK_COLORS[inc.severity]} strokeDasharray="3 3" />
-                <Line
-                  dataKey="v"
-                  stroke={RISK_COLORS[inc.severity]}
-                  strokeWidth={1.5}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <MiniMap lat={inc.lat} lon={inc.lon} color={RISK_COLORS[inc.severity]} />
         </div>
       )}
-      <div>
-        <div className="mb-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">Timeline</div>
+
+      {tab === "timeline" && (
         <ul className="space-y-0.5">
           {inc.timeline.map((e, idx) => (
             <li key={idx} className="flex gap-2 font-mono text-[10px]">
@@ -88,7 +185,7 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
             </li>
           ))}
         </ul>
-      </div>
+      )}
     </div>
   );
 }
@@ -271,7 +368,9 @@ export function IncidentQueue({
                 </>
               )}
             </div>
-            {expandedId === inc.id && <IncidentDetail engine={engine} inc={inc} />}
+            {expandedId === inc.id && (
+              <IncidentDetail engine={engine} inc={inc} device={deviceById.get(inc.deviceId) ?? null} />
+            )}
           </li>
           );
         })}

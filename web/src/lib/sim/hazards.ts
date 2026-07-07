@@ -1,4 +1,4 @@
-import type { HazardKind, Metric } from "./types";
+import type { Contribution, HazardKind, Metric } from "./types";
 
 interface HazardTerm {
   metric: Metric;
@@ -24,6 +24,35 @@ export interface HazardProfile {
   /** Moving systems travel across the region over their lifetime. */
   moving: boolean;
   title: (deviceName: string) => string;
+  /** Operator-facing impact summary shown in the incident detail. */
+  impact: string;
+}
+
+/**
+ * Score a reading's z-vector against every hazard signature — the "pattern
+ * match" panel. Same math as the engine's scoring loop (term weights ×
+ * positive z, quarantined metrics excluded), on the same ×16 scale as
+ * riskScore, so 100 ≈ a fully saturated signature.
+ */
+export function hazardMatches(
+  contributions: Contribution[],
+): Array<{ kind: HazardKind; label: string; match: number }> {
+  const z: Partial<Record<Metric, number>> = {};
+  const quarantined = new Set<Metric>();
+  for (const c of contributions) {
+    z[c.metric] = c.z;
+    if (c.quarantined) quarantined.add(c.metric);
+  }
+  return (Object.keys(HAZARDS) as HazardKind[])
+    .map((kind) => {
+      let s = 0;
+      for (const term of HAZARDS[kind].terms) {
+        if (quarantined.has(term.metric)) continue;
+        s += term.weight * Math.max(0, term.dir * (z[term.metric] ?? 0));
+      }
+      return { kind, label: HAZARDS[kind].label, match: Math.min(99, Math.round(s * 16)) };
+    })
+    .sort((a, b) => b.match - a.match);
 }
 
 export const HAZARDS: Record<HazardKind, HazardProfile> = {
@@ -40,6 +69,8 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 0.28,
     moving: false,
     title: (n) => `Fire-weather anomaly at ${n}`,
+    impact:
+      "Smoke and particulate transport threaten air quality downwind while low humidity sustains fire weather. Watch adjacent ridge nodes and prepare air-quality advisories.",
   },
   flood: {
     label: "Flash flood",
@@ -52,6 +83,8 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 0.3,
     moving: false,
     title: (n) => `Rising water anomaly at ${n}`,
+    impact:
+      "Rapid water-level rise stresses drainage basins; localized road flooding is likely near wash nodes. Verify upstream gauges and low-lying infrastructure.",
   },
   hurricane: {
     label: "Hurricane conditions",
@@ -65,6 +98,8 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 0.9,
     moving: true,
     title: (n) => `Hurricane-force conditions at ${n}`,
+    impact:
+      "Sustained damaging winds with surge-driven coastal flooding; power and comms outages likely. Coastal nodes may drop offline — treat data gaps as suspect, not calm.",
   },
   heat: {
     label: "Extreme heat",
@@ -77,6 +112,8 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 0.6,
     moving: false,
     title: (n) => `Extreme heat anomaly at ${n}`,
+    impact:
+      "Prolonged extreme heat raises grid load and health risk for vulnerable populations; overnight lows offer little recovery. Coordinate cooling-center advisories.",
   },
   tornado: {
     label: "Tornado-signature winds",
@@ -90,6 +127,8 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 0.22,
     moving: true,
     title: (n) => `Tornado-signature winds at ${n}`,
+    impact:
+      "Short-lived violent wind signature; the damage footprint is narrow but severe. Confirm with neighboring nodes before dispatching resources.",
   },
   winter_storm: {
     label: "Winter storm",
@@ -102,6 +141,8 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 1.1,
     moving: true,
     title: (n) => `Winter storm conditions at ${n}`,
+    impact:
+      "Deep cold with high winds — icing and wind chill threaten infrastructure, and battery performance degrades sharply at low temperature.",
   },
   air_quality: {
     label: "Air quality event",
@@ -114,5 +155,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
     radius: 0.45,
     moving: false,
     title: (n) => `Air quality degradation at ${n}`,
+    impact:
+      "Elevated PM2.5 reduces visibility and poses respiratory risk; sensitive groups are affected first. Track plume drift via neighboring nodes.",
   },
 };

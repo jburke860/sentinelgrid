@@ -70,6 +70,15 @@ test("zooming drills into a region and back out to national, no clicks", async (
   });
 });
 
+test("analytics view shows fingerprint, pattern match, and model confidence", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Analytics" }).click();
+  await expect(page.getByText("Anomaly Fingerprint")).toBeVisible();
+  await expect(page.getByText("Pattern match")).toBeVisible();
+  await expect(page.getByText("Model Confidence")).toBeVisible();
+  await expect(page.getByText("zscore-baseline v0.2").first()).toBeVisible();
+});
+
 test("incident detail opens from the queue", async ({ page }) => {
   await page.goto("/");
   const incident = page.locator("li", { hasText: "INC-" }).first();

@@ -7,7 +7,9 @@ import { AnomalyPanel } from "@/components/AnomalyPanel";
 import { DeviceDrawer } from "@/components/DeviceDrawer";
 import { DeviceTable } from "@/components/DeviceTable";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { FingerprintPanel } from "@/components/FingerprintPanel";
 import { IncidentQueue } from "@/components/IncidentQueue";
+import { ModelConfidence } from "@/components/ModelConfidence";
 import { KpiStrip, type KpiPoint } from "@/components/KpiStrip";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SideRail, type View } from "@/components/SideRail";
@@ -200,6 +202,16 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const scopedDevices = regionId ? viewData.devices.filter((d) => d.regionId === regionId) : viewData.devices;
   const scopedIncidents = regionId ? viewData.incidents.filter((i) => i.regionId === regionId) : viewData.incidents;
   const selected = viewData.devices.find((d) => d.deviceId === selectedId) ?? null;
+  // Fingerprint target: the selected node, else the riskiest online node.
+  const fingerprintDevice =
+    selected ??
+    viewData.devices.reduce<(typeof viewData.devices)[number] | null>(
+      (best, d) =>
+        d.status !== "offline" && d.latest && (d.latest.riskScore ?? 0) > (best?.latest?.riskScore ?? -1)
+          ? d
+          : best,
+      null,
+    );
   const drawerDevice = drawerId ? (viewData.devices.find((d) => d.deviceId === drawerId) ?? null) : null;
   const regionName = regionId
     ? (snap.regions.find((r) => r.id === regionId)?.name ?? "")
@@ -236,8 +248,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       map: "hidden",
       incidents: "hidden",
       devices: "hidden",
-      telemetry: "flex lg:col-span-7 lg:row-span-6",
-      anomaly: "flex lg:col-span-5 lg:row-span-6",
+      telemetry: "flex lg:col-span-7 lg:row-span-4",
+      anomaly: "hidden lg:flex lg:col-span-7 lg:row-span-2",
     },
   };
   const panelClass = (panel: string) => LAYOUTS[view][panel];
@@ -369,11 +381,27 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           </ErrorBoundary>
         </div>
 
+        {view === "analytics" && (
+          <div className="flex min-h-0 lg:col-span-5 lg:row-span-4">
+            <ErrorBoundary label="Anomaly fingerprint">
+              <FingerprintPanel accent="#06b6d4" device={fingerprintDevice} auto={!selected} />
+            </ErrorBoundary>
+          </div>
+        )}
+
         <div className={`${panelClass("anomaly")} min-h-0`}>
           <ErrorBoundary label="Anomaly panel">
             <AnomalyPanel accent="#f59e0b" device={selected} events={viewData.events} />
           </ErrorBoundary>
         </div>
+
+        {view === "analytics" && (
+          <div className="hidden min-h-0 lg:flex lg:col-span-5 lg:row-span-2">
+            <ErrorBoundary label="Model confidence">
+              <ModelConfidence accent="#10b981" snap={snap} />
+            </ErrorBoundary>
+          </div>
+        )}
       </main>
       </div>
       )}

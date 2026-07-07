@@ -24,7 +24,10 @@ export function SideRail({
   onOpenAbout: () => void;
 }) {
   return (
-    <nav className="hidden w-16 shrink-0 flex-col items-center gap-1 border-r border-edge bg-panel py-2 lg:flex">
+    <nav
+      aria-label="Primary"
+      className="hidden w-16 shrink-0 flex-col items-center gap-1 border-r border-edge bg-panel py-2 lg:flex"
+    >
       {ITEMS.map(({ id, label, icon: Icon }) => (
         <button
           key={id}
