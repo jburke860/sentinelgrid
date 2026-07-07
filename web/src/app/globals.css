@@ -77,6 +77,46 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- numbered risk badges on the map (leaflet divIcons) ---- */
+
+.node-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 2px solid var(--nb);
+  background: color-mix(in srgb, var(--nb) 20%, var(--color-panel));
+  color: var(--color-ink);
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--nb) 50%, transparent);
+}
+
+.node-badge-region {
+  font-size: 11px;
+  border-width: 2.5px;
+}
+
+.node-badge-sel {
+  border-width: 3px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 45%, transparent),
+    0 0 10px var(--nb);
+}
+
+.node-badge-off {
+  opacity: 0.55;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.node-badge-ring {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--nb) 10%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--nb) 45%, transparent);
+}
+
 /* ---- range input (playback scrubber) ---- */
 
 input[type="range"].scrubber {

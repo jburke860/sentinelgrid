@@ -323,6 +323,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
                 selectedId={selectedId}
                 onSelect={selectDevice}
                 onSelectRegion={selectRegion}
+                scrubber={<TimeScrubber snap={snap} viewTime={viewTime} onScrub={setViewTime} docked />}
               />
             </Panel>
           </ErrorBoundary>
@@ -377,7 +378,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       </div>
       )}
 
-      <TimeScrubber snap={snap} viewTime={viewTime} onScrub={setViewTime} />
+      {/* On the overview the scrubber is docked onto the map; other views get the bottom bar. */}
+      {view !== "overview" && <TimeScrubber snap={snap} viewTime={viewTime} onScrub={setViewTime} />}
       <footer className="hidden shrink-0 items-center gap-4 border-t border-edge bg-panel px-4 py-1.5 font-mono text-[10px] text-ink-dim sm:flex">
         <span className="inline-flex items-center gap-1.5" title="Baseline data feeds">
           <span className={`h-1.5 w-1.5 rounded-full ${snap.replay && snap.liveAnchorAt ? "bg-ok" : "bg-edge"}`} />
