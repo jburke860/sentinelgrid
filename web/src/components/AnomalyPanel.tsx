@@ -74,7 +74,7 @@ export function AnomalyPanel({
             <div className="space-y-1">
               <RiskBadge level={reading.riskLevel} />
               <div className="font-mono text-[10px] text-ink-dim">
-                model zscore-baseline v0.1 · seq {reading.sequence}
+                model zscore-baseline v0.2 · seq {reading.sequence}
               </div>
             </div>
           </div>

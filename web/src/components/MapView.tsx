@@ -4,15 +4,29 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import "leaflet.heat";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { HAZARD_HUES } from "./icons";
 import type { DeviceView, Incident, RegionView, ScenarioState } from "@/lib/sim/types";
 import { RISK_COLORS, RiskBadge, StatusDot, fmtTime } from "./ui";
 
 const NATIONAL_CENTER: [number, number] = [38.5, -97];
 const NATIONAL_ZOOM = 4;
+// At this zoom and beyond the map shows individual devices and the selected
+// region follows the viewport; below it, regional aggregates and a national
+// selection. Region fly-to zooms are all >= this, so click navigation and
+// scroll-zoom navigation land in the same mode.
+const DETAIL_ZOOM = 6;
+// Don't auto-adopt a region whose center is further than this (degrees) from
+// the viewport center — zooming into empty country keeps the current scope.
+const ADOPT_RADIUS_DEG = 4;
 
-function FlyTo({ region }: { region: RegionView | null }) {
+function FlyTo({
+  region,
+  suppress,
+}: {
+  region: RegionView | null;
+  suppress: React.RefObject<boolean>;
+}) {
   const map = useMap();
   const firstRender = useRef(true);
   useEffect(() => {
@@ -23,10 +37,62 @@ function FlyTo({ region }: { region: RegionView | null }) {
       firstRender.current = false;
       return;
     }
+    // Region changes that came from the user's own zooming/panning must not
+    // trigger a counter-animation — the map is already where they put it.
+    if (suppress.current) {
+      suppress.current = false;
+      return;
+    }
     const center = region ? region.center : NATIONAL_CENTER;
     const zoom = region ? region.zoom : NATIONAL_ZOOM;
-    map.flyTo(center, zoom, { duration: 0.8 });
+    map.flyTo(center, zoom, { duration: 0.9 });
   }, [map, region?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/**
+ * Two-way viewport ↔ selection sync: zooming in drills into the nearest
+ * region, zooming back out returns to the national overview — no clicks
+ * needed. Props are read through a ref because react-leaflet registers event
+ * handlers once on mount.
+ */
+function ViewportSync(props: {
+  regions: RegionView[];
+  selectedRegion: string | null;
+  onSelectRegion: (id: string | null) => void;
+  suppress: React.RefObject<boolean>;
+  onDetailChange: (detail: boolean) => void;
+}) {
+  const latest = useRef(props);
+  latest.current = props;
+  const map = useMapEvents({
+    zoomend: () => sync(),
+    moveend: () => sync(),
+  });
+  const sync = () => {
+    const { regions, selectedRegion, onSelectRegion, suppress, onDetailChange } = latest.current;
+    const zoom = map.getZoom();
+    onDetailChange(zoom >= DETAIL_ZOOM);
+    if (zoom >= DETAIL_ZOOM) {
+      const c = map.getCenter();
+      let best: RegionView | null = null;
+      let bestDist = Infinity;
+      for (const r of regions) {
+        const dist = Math.hypot(r.center[0] - c.lat, r.center[1] - c.lng);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = r;
+        }
+      }
+      if (best && bestDist <= ADOPT_RADIUS_DEG && best.id !== selectedRegion) {
+        suppress.current = true;
+        onSelectRegion(best.id);
+      }
+    } else if (selectedRegion) {
+      suppress.current = true;
+      onSelectRegion(null);
+    }
+  };
   return null;
 }
 
@@ -90,7 +156,6 @@ export default function MapView({
 }) {
   const region = selectedRegion ? (regions.find((r) => r.id === selectedRegion) ?? null) : null;
   const activeIncidents = incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed");
-  const national = region === null;
   const [heat, setHeat] = useState(true);
   // Capture the mount-time view once: MapContainer ignores prop changes and
   // FlyTo handles all later movement.
@@ -98,6 +163,12 @@ export default function MapView({
     center: region ? region.center : NATIONAL_CENTER,
     zoom: region ? region.zoom : NATIONAL_ZOOM,
   });
+  // Device-level detail vs national aggregates follows the live zoom level,
+  // so the two views blend into each other as you zoom.
+  const [detail, setDetail] = useState(initialView.current.zoom >= DETAIL_ZOOM);
+  // Set before selection changes that originate from map gestures; FlyTo
+  // consumes it to skip the counter-animation.
+  const suppressFly = useRef(false);
 
   const heatPoints = useMemo<Array<[number, number, number]>>(
     () =>
@@ -113,9 +184,7 @@ export default function MapView({
     [devices, heat],
   );
 
-  const visibleScenarios = scenarios.filter(
-    (s) => s.epicenter && s.kind !== "dropout" && (national || s.regionId === selectedRegion),
-  );
+  const visibleScenarios = scenarios.filter((s) => s.epicenter && s.kind !== "dropout");
 
   return (
     <div className="relative h-full w-full">
@@ -123,6 +192,9 @@ export default function MapView({
         center={initialView.current.center}
         zoom={initialView.current.zoom}
         zoomControl={false}
+        zoomSnap={0.5}
+        zoomDelta={0.5}
+        wheelPxPerZoomLevel={90}
         className="z-0"
       >
         <TileLayer
@@ -134,7 +206,14 @@ export default function MapView({
           }
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
-        <FlyTo region={region} />
+        <FlyTo region={region} suppress={suppressFly} />
+        <ViewportSync
+          regions={regions}
+          selectedRegion={selectedRegion}
+          onSelectRegion={onSelectRegion}
+          suppress={suppressFly}
+          onDetailChange={setDetail}
+        />
         {heat && <HeatLayer points={heatPoints} />}
 
         {/* Active scenario epicenters: hazard-hued storm-center rings, fully
@@ -166,7 +245,7 @@ export default function MapView({
           ];
         })}
 
-        {national
+        {!detail
           ? // National overview: one aggregate marker per region.
             regions.map((r) => {
               const color = RISK_COLORS[r.peakLevel];
@@ -193,11 +272,10 @@ export default function MapView({
                 </CircleMarker>
               );
             })
-          : // Region drill-down: individual device markers plus incident rings.
+          : // Zoomed-in detail: every device marker plus incident rings — the
+            // whole fleet renders so panning between regions needs no clicks.
             [
-              ...activeIncidents
-                .filter((i) => i.regionId === selectedRegion)
-                .map((inc) => (
+              ...activeIncidents.map((inc) => (
                   <CircleMarker
                     key={`inc-${inc.id}`}
                     center={[inc.lat, inc.lon]}
@@ -211,9 +289,7 @@ export default function MapView({
                     }}
                   />
                 )),
-              ...devices
-                .filter((d) => d.regionId === selectedRegion)
-                .map((d) => {
+              ...devices.map((d) => {
                   const level = d.latest?.riskLevel ?? "normal";
                   const offline = d.status === "offline";
                   const color = offline ? "#8195aa" : RISK_COLORS[level];

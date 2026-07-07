@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test("dashboard boots the simulated fleet", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /SENTINEL/ })).toBeVisible();
-  // All 50 nodes report in.
-  await expect(page.locator("header").getByText("/50")).toBeVisible({ timeout: 20_000 });
+  // All 150 nodes report in.
+  await expect(page.locator("header").getByText("/150")).toBeVisible({ timeout: 20_000 });
   // The map mounts with tiles.
   await expect(page.locator(".leaflet-container")).toBeVisible();
 });
@@ -40,6 +40,34 @@ test("rapid region navigation never crashes the heat layer", async ({ page }) =>
   // The Next.js dev error overlay must not be showing either (the bare
   // nextjs-portal element always exists in dev — it also hosts the toolbar).
   await expect(page.getByText(/Runtime \w*Error/)).toHaveCount(0);
+});
+
+test("zooming drills into a region and back out to national, no clicks", async ({ page }) => {
+  await page.goto("/");
+  const map = page.locator(".leaflet-container");
+  await expect(map).toBeVisible();
+  await expect(page.getByText("Live Fleet Map — National Overview")).toBeVisible();
+
+  // Scroll-zoom into the middle of the country: the nearest region should be
+  // adopted automatically once device-level zoom is reached.
+  const box = (await map.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, -240);
+    await page.waitForTimeout(250);
+  }
+  await expect(page.getByText(/Live Fleet Map — (?!National Overview)/)).toBeVisible({
+    timeout: 5_000,
+  });
+
+  // Scroll back out: the selection returns to the national overview.
+  for (let i = 0; i < 8; i++) {
+    await page.mouse.wheel(0, 240);
+    await page.waitForTimeout(250);
+  }
+  await expect(page.getByText("Live Fleet Map — National Overview")).toBeVisible({
+    timeout: 5_000,
+  });
 });
 
 test("incident detail opens from the queue", async ({ page }) => {

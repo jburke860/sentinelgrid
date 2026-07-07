@@ -30,11 +30,19 @@ import {
 
 const TICK_REAL_MS = 1500;
 const TICK_SIM_MS = 30_000; // each tick advances 30s of sim time at 1x
-const HISTORY_CAP = 400; // fine-grained readings kept per device (~3.3h)
+const HISTORY_CAP = 300; // fine-grained readings kept per device (~2.5h)
 const COARSE_EVERY = 10; // one downsampled reading per 5 sim-minutes...
 const COARSE_CAP = 288; // ...kept for ~24h, so the scrubber reaches back a day
 const BACKFILL_TICKS = 130; // ~1h of sim history so charts start populated
-const EWMA_ALPHA = 0.01; // slow rolling baseline for drift detection
+// Rolling baseline for drift detection (τ ≈ 20 ticks). Must track a drifting
+// sensor closely enough that reading-vs-EWMA stays small while EWMA-vs-expected
+// grows — that divergence is the quarantine signal.
+const EWMA_ALPHA = 0.05;
+// Drift walks this fast (in baseline-σ per tick). Keep well below
+// EWMA_ALPHA × 1.5σ so the EWMA can follow the walk and flag it.
+const DRIFT_RATE = 0.02;
+const DRIFT_CAP = 5; // drift offset saturates at ±5σ — broken, not apocalyptic
+const DRIFT_QUARANTINE_STREAK = 4; // consecutive ticks of evidence before quarantining
 const MAX_CONCURRENT_SCENARIOS = 3; // one per region, up to three regions at once
 
 interface ActiveScenario extends ScenarioState {
@@ -53,8 +61,9 @@ interface DeviceState {
   lastSeenAt: number | null;
   offlineTicksLeft: number;
   justRecovered: boolean;
-  drift: { metric: Metric; offset: number; ticksLeft: number } | null;
+  drift: { metric: Metric; offset: number; ticksLeft: number; dir: 1 | -1 } | null;
   ewma: Record<Metric, number>;
+  dqStreak: Record<Metric, number>;
   highRiskStreak: number;
   normalStreak: number;
   history: Reading[];
@@ -290,6 +299,14 @@ export class SimEngine implements DataEngine {
         justRecovered: false,
         drift: null,
         ewma: { ...expected },
+        dqStreak: {
+          temperature_c: 0,
+          humidity_pct: 0,
+          pm25_ugm3: 0,
+          smoke_ppm: 0,
+          water_level_m: 0,
+          wind_speed_mps: 0,
+        },
         highRiskStreak: 0,
         normalStreak: 0,
         history: [],
@@ -536,12 +553,28 @@ export class SimEngine implements DataEngine {
     );
     state.rssiDbm = Math.max(-96, Math.min(-52, state.rssiDbm + this.rng.normal(0, 1.2)));
 
-    // Rare sensor drift episodes (the data-quality story).
-    if (!state.drift && this.rng.chance(0.0006)) {
-      state.drift = { metric: this.rng.pick(METRICS), offset: 0, ticksLeft: this.rng.int(60, 120) };
+    // Rare sensor drift episodes (the data-quality story): a slow, bounded
+    // one-directional walk — the fleet averages ~2-3 drifting sensors at a
+    // time, and each is quarantined by the EWMA check before it can fake a
+    // hazard (see the drift-quarantine block below).
+    if (!state.drift && this.rng.chance(0.00006)) {
+      state.drift = {
+        metric: this.rng.pick(METRICS),
+        offset: 0,
+        ticksLeft: this.rng.int(200, 400),
+        dir: this.rng.chance(0.5) ? 1 : -1,
+      };
     }
     if (state.drift) {
-      state.drift.offset += this.rng.normal(0.12, 0.04) * BASELINE_STD[state.drift.metric];
+      const cap = DRIFT_CAP * BASELINE_STD[state.drift.metric];
+      state.drift.offset = Math.max(
+        -cap,
+        Math.min(
+          cap,
+          state.drift.offset +
+            state.drift.dir * this.rng.normal(DRIFT_RATE, DRIFT_RATE / 3) * BASELINE_STD[state.drift.metric],
+        ),
+      );
       state.drift.ticksLeft--;
       if (state.drift.ticksLeft <= 0) {
         this.pushEvent("device", `${spec.displayName}: ${METRIC_LABELS[state.drift.metric]} sensor recalibrated`);
@@ -593,13 +626,20 @@ export class SimEngine implements DataEngine {
     // baseline has walked away from expectation — while readings stay close
     // to that walked baseline — is drifting hardware, not a hazard: flag it
     // and quarantine it from hazard scoring, like the worker's DQ job would.
+    // Metrics being forced by an active scenario are exempt: that's signal,
+    // and letting it into the EWMA would absorb real events into "baseline"
+    // (and later mis-flag the recovery as drift).
     const quarantined = new Set<Metric>();
     for (const m of METRICS) {
+      if (Math.abs(scenarioDelta[m]) > 0.3 * BASELINE_STD[m]) {
+        state.dqStreak[m] = 0;
+        continue;
+      }
       const ewmaDelta = Math.abs(state.ewma[m] - expected[m]);
       const shortTermDelta = Math.abs(values[m] - state.ewma[m]);
-      if (ewmaDelta > 2 * BASELINE_STD[m] && shortTermDelta < 1.5 * BASELINE_STD[m]) {
-        quarantined.add(m);
-      }
+      const drifting = ewmaDelta > 1.75 * BASELINE_STD[m] && shortTermDelta < 1.5 * BASELINE_STD[m];
+      state.dqStreak[m] = drifting ? state.dqStreak[m] + 1 : 0;
+      if (state.dqStreak[m] >= DRIFT_QUARANTINE_STREAK) quarantined.add(m);
       state.ewma[m] = state.ewma[m] + EWMA_ALPHA * (values[m] - state.ewma[m]);
     }
 
@@ -727,7 +767,7 @@ export class SimEngine implements DataEngine {
       severity: reading.riskLevel === "critical" ? "critical" : "warning",
       hazard,
       title: HAZARDS[hazard].title(spec.displayName),
-      summary: `Sustained ${reading.riskLevel} readings. ${detail}. Model zscore-baseline v0.1.`,
+      summary: `Sustained ${reading.riskLevel} readings. ${detail}. Model zscore-baseline v0.2.`,
       openedAt: this.simTime,
       acknowledgedAt: null,
       closedAt: null,

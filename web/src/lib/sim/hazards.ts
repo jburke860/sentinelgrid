@@ -11,7 +11,12 @@ export interface HazardProfile {
   label: string;
   /** Weighted z-score terms combined into the hazard score. */
   terms: HazardTerm[];
-  /** Peak metric deltas injected at a scenario epicenter. */
+  /**
+   * Peak metric deltas injected at a scenario epicenter. Calibrated against
+   * BASELINE_STD so the primary metric peaks around 10-13σ and secondaries at
+   * 3-6σ: risk saturates at the storm core and grades outward, instead of
+   * pegging 100 across the whole plume.
+   */
   deltas: Partial<Record<Metric, number>>;
   durationTicks: [number, number];
   /** Gaussian falloff radius (degrees) around the scenario epicenter. */
@@ -30,7 +35,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "temperature_c", dir: 1, weight: 0.2 },
       { metric: "humidity_pct", dir: -1, weight: 0.1 },
     ],
-    deltas: { temperature_c: 14, humidity_pct: -14, pm25_ugm3: 160, smoke_ppm: 55, wind_speed_mps: 4 },
+    deltas: { temperature_c: 10, humidity_pct: -14, pm25_ugm3: 70, smoke_ppm: 12, wind_speed_mps: 4 },
     durationTicks: [45, 60],
     radius: 0.28,
     moving: false,
@@ -42,7 +47,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "water_level_m", dir: 1, weight: 0.75 },
       { metric: "wind_speed_mps", dir: 1, weight: 0.25 },
     ],
-    deltas: { water_level_m: 3.2, wind_speed_mps: 5, humidity_pct: 35 },
+    deltas: { water_level_m: 1.6, wind_speed_mps: 5, humidity_pct: 25 },
     durationTicks: [45, 60],
     radius: 0.3,
     moving: false,
@@ -55,7 +60,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "water_level_m", dir: 1, weight: 0.35 },
       { metric: "humidity_pct", dir: 1, weight: 0.15 },
     ],
-    deltas: { wind_speed_mps: 26, water_level_m: 2.6, humidity_pct: 40, temperature_c: -3 },
+    deltas: { wind_speed_mps: 16, water_level_m: 1.8, humidity_pct: 30, temperature_c: -3 },
     durationTicks: [55, 75],
     radius: 0.9,
     moving: true,
@@ -67,7 +72,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "temperature_c", dir: 1, weight: 0.8 },
       { metric: "humidity_pct", dir: -1, weight: 0.2 },
     ],
-    deltas: { temperature_c: 13, humidity_pct: -14 },
+    deltas: { temperature_c: 16, humidity_pct: -18 },
     durationTicks: [50, 70],
     radius: 0.6,
     moving: false,
@@ -80,7 +85,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "humidity_pct", dir: 1, weight: 0.15 },
       { metric: "temperature_c", dir: 1, weight: 0.1 },
     ],
-    deltas: { wind_speed_mps: 32, humidity_pct: 25 },
+    deltas: { wind_speed_mps: 18, humidity_pct: 20 },
     durationTicks: [18, 30],
     radius: 0.22,
     moving: true,
@@ -104,7 +109,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "pm25_ugm3", dir: 1, weight: 0.6 },
       { metric: "smoke_ppm", dir: 1, weight: 0.4 },
     ],
-    deltas: { pm25_ugm3: 90, smoke_ppm: 18 },
+    deltas: { pm25_ugm3: 60, smoke_ppm: 8 },
     durationTicks: [50, 70],
     radius: 0.45,
     moving: false,

@@ -15,6 +15,7 @@ import { TopBar } from "@/components/TopBar";
 import { Panel } from "@/components/ui";
 import { LiveEngine } from "@/lib/liveClient";
 import { SimEngine } from "@/lib/sim/engine";
+import { FLEET, REGIONS } from "@/lib/sim/fleet";
 import type { DataEngine, LiveAnchor } from "@/lib/sim/types";
 import { readUrlState, writeUrlState } from "@/lib/urlState";
 import { useSim } from "@/lib/useSim";
@@ -320,7 +321,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
       <TimeScrubber snap={snap} viewTime={viewTime} onScrub={setViewTime} />
       <footer className="hidden shrink-0 border-t border-edge bg-panel px-4 py-1.5 text-center font-mono text-[10px] text-ink-dim sm:block">
-        SentinelGrid demo — 50 virtual nodes, 9 US regions, simulated in your browser (seeded,
+        SentinelGrid demo — {FLEET.length} virtual nodes, {REGIONS.length} US regions, simulated in your browser (seeded,
         deterministic{snap.replay && snap.liveAnchorAt ? `, baselines anchored to NWS/USGS observations from ${snap.liveAnchorAt.slice(0, 10)}` : ""}).
         Created by <span className="text-ink">Jeremy Burke</span> ·{" "}
         <a

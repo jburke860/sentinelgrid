@@ -16,13 +16,20 @@ const UA = "sentinelgrid-demo (github.com/jburke860/sentinelgrid)";
 // sensor at ~1.2 m.
 const REGION_SOURCES = {
   socal: { nws: "KLAX", usgs: "11092450" }, // LA River @ Sepulveda Dam
+  norcal: { nws: "KSFO", usgs: null },
   pnw: { nws: "KSEA", usgs: "12144500" }, // Snoqualmie River
   southwest: { nws: "KPHX", usgs: null },
+  mountainwest: { nws: "KSLC", usgs: null },
   rockies: { nws: "KDEN", usgs: "06730200" }, // Boulder Creek
+  texas: { nws: "KAUS", usgs: null },
   gulf: { nws: "KHOU", usgs: "08074000" }, // Buffalo Bayou
   southeast: { nws: "KMIA", usgs: "02304500" }, // Hillsborough River
+  carolinas: { nws: "KCLT", usgs: null },
   midwest: { nws: "KSTL", usgs: null },
   plains: { nws: "KOKC", usgs: null },
+  uppermidwest: { nws: "KMSP", usgs: null },
+  greatlakes: { nws: "KORD", usgs: null },
+  midatlantic: { nws: "KBWI", usgs: null },
   northeast: { nws: "KBOS", usgs: "01104500" }, // Charles River
 };
 

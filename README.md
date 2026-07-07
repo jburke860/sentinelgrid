@@ -64,8 +64,8 @@ Next.js dashboard ---> FastAPI query endpoints ---> PostgreSQL/PostGIS
 ## Two Ways to Run It
 
 **Hosted demo (sim mode).** `web/` is the operator dashboard, deployable as a
-static site with zero backend: a deterministic in-browser engine simulates 50
-virtual nodes across 9 US regions, scores anomalies with the same z-score
+static site with zero backend: a deterministic in-browser engine simulates 150
+virtual nodes across 16 US regions, scores anomalies with the same z-score
 model as the worker, and drives the incident queue. Baselines can anchor to
 real NWS/USGS observations baked in at build time and refreshed daily by CI.
 
@@ -143,11 +143,12 @@ fresh volumes and a matching Alembic revision for existing databases.
 
 ## Fleet
 
-50 virtual nodes in 9 regions (Southern California, Pacific Northwest, Desert
-Southwest, Colorado Front Range, Gulf Coast, Florida Peninsula, Mississippi
-Valley, Southern Plains, Northeast Corridor), each with region-appropriate
-hazard profiles: wildfire, flood, hurricane, extreme heat, tornado, winter
-storm, air quality. Devices are seeded from `db/seeds/devices.json`, which is
+150 virtual nodes in 16 regions (Southern California, Northern California,
+Pacific Northwest, Desert Southwest, Great Basin & Wasatch, Colorado Front
+Range, Texas Triangle, Gulf Coast, Florida Peninsula, Carolinas & Georgia,
+Mississippi Valley, Southern Plains, Upper Midwest, Great Lakes, Mid-Atlantic,
+Northeast Corridor), each with region-appropriate hazard profiles: wildfire,
+flood, hurricane, extreme heat, tornado, winter storm, air quality. Devices are seeded from `db/seeds/devices.json`, which is
 the shared source of truth for the browser sim, the C++ publisher, and the
 database.
 

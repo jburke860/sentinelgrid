@@ -138,7 +138,7 @@ describe("SimEngine", () => {
     stepN(e, 700);
     const snap = e.getSnapshot();
     const series = e.getSeries(FLEET[0].deviceId);
-    // Fine cap is 400 ticks; combined series must reach further back.
+    // Fine cap is 300 ticks; combined series must reach further back.
     expect(series[0].t).toBeLessThan(snap.simTime - 400 * 30_000);
     for (let i = 1; i < series.length; i++) expect(series[i].t).toBeGreaterThan(series[i - 1].t);
     expect(snap.historyStart).toBeLessThanOrEqual(series[0].t);
@@ -157,6 +157,43 @@ describe("SimEngine", () => {
     snap = e.getSnapshot();
     expect(snap.storyline).toBeNull();
     expect(snap.incidents.some((i) => i.hazard === "hurricane" && i.regionId === "gulf")).toBe(true);
+  });
+
+  it("quarantines a drifting sensor instead of opening a phantom incident", () => {
+    const e = new SimEngine(42);
+    quiesce(e);
+    const t0 = e.getSnapshot().simTime;
+    // Inject a long smoke-sensor drift on a SoCal node — smoke is wildfire's
+    // heaviest term, so un-quarantined drift would read as a fire.
+    const internals = e as unknown as {
+      devices: Map<string, { drift: { metric: string; offset: number; ticksLeft: number; dir: number } | null }>;
+    };
+    internals.devices.get("edge-ca-001")!.drift = {
+      metric: "smoke_ppm",
+      offset: 0,
+      ticksLeft: 400,
+      dir: 1,
+    };
+    stepN(e, 300);
+    const dev = e.getSnapshot().devices.find((d) => d.deviceId === "edge-ca-001")!;
+    const smoke = dev.latest!.contributions.find((c) => c.metric === "smoke_ppm")!;
+    expect(smoke.quarantined).toBe(true);
+    expect(smoke.z).toBeGreaterThan(2); // the walk itself stays visible...
+    expect(dev.latest!.riskScore).toBeLessThan(50); // ...but never scores as a hazard
+    expect(dev.latest!.flags).toContain("sensor_drift");
+    const phantom = e
+      .getSnapshot()
+      .incidents.filter((i) => i.deviceId === "edge-ca-001" && i.openedAt > t0);
+    expect(phantom).toHaveLength(0);
+  });
+
+  it("opens no incidents from baseline noise alone", () => {
+    const e = new SimEngine(1234);
+    quiesce(e);
+    const t0 = e.getSnapshot().simTime;
+    stepN(e, 300);
+    const fresh = e.getSnapshot().incidents.filter((i) => i.openedAt > t0);
+    expect(fresh).toHaveLength(0);
   });
 
   it("reconstructs past state for the playback scrubber", () => {

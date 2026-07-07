@@ -1,5 +1,6 @@
 "use client";
 
+import { FLEET, REGIONS } from "@/lib/sim/fleet";
 import { Kbd } from "./ui";
 
 function FlowBox({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
@@ -43,8 +44,9 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
         <div className="space-y-4 p-4 text-xs leading-relaxed text-ink/90">
           <p>
             SentinelGrid is a personal-project edge telemetry platform for climate-risk monitoring. This demo
-            simulates the full system in your browser: <strong className="text-ink">50 virtual sensor nodes</strong>{" "}
-            across <strong className="text-ink">9 US regions</strong> stream readings every 30 simulated seconds, an
+            simulates the full system in your browser:{" "}
+            <strong className="text-ink">{FLEET.length} virtual sensor nodes</strong> across{" "}
+            <strong className="text-ink">{REGIONS.length} US regions</strong> stream readings every 30 simulated seconds, an
             anomaly model scores every reading, and sustained anomalies open incidents an operator can work.
           </p>
 
@@ -53,7 +55,7 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
               The full platform (this repo)
             </div>
             <div className="space-y-1">
-              <FlowBox>C++ edge-device simulator — 50 nodes</FlowBox>
+              <FlowBox>C++ edge-device simulator — {FLEET.length} nodes</FlowBox>
               <Arrow />
               <FlowBox>MQTT · Mosquitto broker</FlowBox>
               <Arrow />
