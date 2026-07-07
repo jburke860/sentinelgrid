@@ -7,24 +7,7 @@ import { HAZARDS } from "@/lib/sim/hazards";
 import { STORYLINES } from "@/lib/sim/storylines";
 import type { DataEngine, HazardKind, ScenarioKind, SimSnapshot } from "@/lib/sim/types";
 import { HazardIcon } from "./icons";
-import { CtrlButton, fmtClock } from "./ui";
-
-function StatPill({
-  label,
-  value,
-  tone = "text-ink",
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone?: string;
-}) {
-  return (
-    <span className="tnum inline-flex items-center gap-1.5 rounded-md border border-edge-soft bg-panel-2 px-2 py-1 font-mono text-[11px]">
-      <span className="text-[10px] tracking-wider text-ink-dim">{label}</span>
-      <span className={tone}>{value}</span>
-    </span>
-  );
-}
+import { CtrlButton } from "./ui";
 
 export function TopBar({
   engine,
@@ -48,19 +31,14 @@ export function TopBar({
   onSelectRegion: (id: string | null) => void;
 }) {
   const region = regionId ? snap.regions.find((r) => r.id === regionId) : null;
-  const scoped = region ? snap.devices.filter((d) => d.regionId === region.id) : snap.devices;
-  const online = scoped.filter((d) => d.status !== "offline").length;
-  const openIncidents = snap.incidents.filter(
-    (i) => i.status !== "resolved" && i.status !== "dismissed" && (!region || i.regionId === region.id),
-  ).length;
-  const maxRisk = Math.max(0, ...scoped.map((d) => (d.status === "offline" ? 0 : d.latest?.riskScore ?? 0)));
   const hazardOptions: HazardKind[] = region
     ? region.hazards
     : ([...new Set(snap.regions.flatMap((r) => r.hazards))] as HazardKind[]);
   const activeHazards = snap.scenarios.filter((s) => s.kind !== "dropout");
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge bg-panel px-3 py-2 sm:px-4">
+    // Rendered inside the page-level <header> together with the KPI strip.
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge bg-panel px-3 py-2 sm:px-4">
       <div className="flex items-center gap-2.5">
         <Image src={logo} alt="SentinelGrid" width={26} height={26} priority className="rounded-md shadow-sm" />
         <h1 className="font-mono text-base font-bold tracking-[0.2em] text-brand">
@@ -84,22 +62,6 @@ export function TopBar({
       </select>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <StatPill label="SIM" value={fmtClock(snap.simTime)} />
-        <StatPill
-          label="NODES"
-          value={
-            <>
-              <span className="text-ok">{online}</span>
-              <span className="opacity-60">/{scoped.length}</span>
-            </>
-          }
-        />
-        <StatPill label="OPEN" value={openIncidents} tone={openIncidents > 0 ? "text-crit" : "text-ok"} />
-        <StatPill
-          label="PEAK"
-          value={maxRisk}
-          tone={maxRisk >= 75 ? "text-crit" : maxRisk >= 50 ? "text-warn" : maxRisk >= 25 ? "text-watch" : "text-ok"}
-        />
         {snap.storyline && (
           <button
             onClick={() => engine.playStoryline(null)}
@@ -221,6 +183,6 @@ export function TopBar({
           <Info size={13} aria-hidden />
         </CtrlButton>
       </div>
-    </header>
+    </div>
   );
 }

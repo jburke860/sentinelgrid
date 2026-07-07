@@ -25,6 +25,68 @@ export function fmtClock(t: number): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${d.toLocaleTimeString([], { hour12: false })}`;
 }
 
+/** "42s ago" / "6m ago" / "3h ago" relative to a reference clock (sim time). */
+export function fmtRelative(now: number, t: number): string {
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
+
+export function fmtDuration(ms: number): string {
+  const m = Math.floor(ms / 60_000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+/** Tiny inline SVG trend line — cheap enough for one per incident card. */
+export function Sparkline({
+  values,
+  color,
+  width = 64,
+  height = 18,
+}: {
+  values: number[];
+  color: string;
+  width?: number;
+  height?: number;
+}) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = width / (values.length - 1);
+  const pts = values
+    .map((v, i) => `${(i * step).toFixed(1)},${(height - 2 - ((v - min) / range) * (height - 4)).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg width={width} height={height} aria-hidden className="shrink-0">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** RSSI as 1-4 signal bars, mock-style. */
+export function SignalBars({ rssi }: { rssi: number }) {
+  const level = rssi >= -65 ? 4 : rssi >= -75 ? 3 : rssi >= -85 ? 2 : 1;
+  return (
+    <span className="inline-flex items-end gap-[2px]" title={`${rssi} dBm`} aria-label={`Signal ${rssi} dBm`}>
+      {[1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          className="w-[3px] rounded-[1px]"
+          style={{
+            height: 3 + i * 2.5,
+            background: i <= level ? (level >= 3 ? "var(--color-ok)" : "var(--color-watch)") : "var(--color-edge)",
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function RiskBadge({ level, score }: { level: RiskLevel; score?: number }) {
   return (
     <span

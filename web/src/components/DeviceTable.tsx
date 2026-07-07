@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { REGION_BY_ID } from "@/lib/sim/fleet";
 import type { DeviceView } from "@/lib/sim/types";
-import { EmptyState, Panel, RiskBadge, StatusDot, fmtTime } from "./ui";
+import { EmptyState, Panel, RiskBadge, SignalBars, StatusDot, fmtTime } from "./ui";
 
 export function DeviceTable({
   accent,
@@ -28,7 +28,10 @@ export function DeviceTable({
   const q = query.trim().toLowerCase();
   if (q) {
     filtered = filtered.filter(
-      (d) => d.displayName.toLowerCase().includes(q) || d.deviceId.toLowerCase().includes(q),
+      (d) =>
+        d.displayName.toLowerCase().includes(q) ||
+        d.deviceId.toLowerCase().includes(q) ||
+        (d.locality ?? "").toLowerCase().includes(q),
     );
   }
   if (issuesOnly) {
@@ -76,7 +79,7 @@ export function DeviceTable({
               <th className="px-3 py-1.5 font-medium">Node</th>
               <th className="px-2 py-1.5 font-medium">Status</th>
               <th className="px-2 py-1.5 text-right font-medium">Batt</th>
-              <th className="hidden px-2 py-1.5 text-right font-medium sm:table-cell">RSSI</th>
+              <th className="hidden px-2 py-1.5 text-right font-medium sm:table-cell">Signal</th>
               <th className="px-2 py-1.5 text-right font-medium">Temp</th>
               <th className="hidden px-2 py-1.5 text-right font-medium sm:table-cell">PM2.5</th>
               <th className="px-2 py-1.5 font-medium">Risk</th>
@@ -95,7 +98,7 @@ export function DeviceTable({
                 <td className="px-3 py-1.5">
                   <div className="font-medium text-ink">{d.displayName}</div>
                   <div className="font-mono text-[10px] text-ink-dim">
-                    {d.deviceId}
+                    {d.locality ?? d.deviceId}
                     {showRegion && (
                       <span className="ml-1.5 rounded bg-panel-2 px-1 text-accent/80">
                         {REGION_BY_ID.get(d.regionId)?.shortName}
@@ -113,8 +116,8 @@ export function DeviceTable({
                 >
                   {d.latest ? `${d.latest.batteryPct.toFixed(0)}%` : "—"}
                 </td>
-                <td className="tnum hidden px-2 py-1.5 text-right font-mono text-ink-dim sm:table-cell">
-                  {d.latest ? d.latest.rssiDbm : "—"}
+                <td className="hidden px-2 py-1.5 text-right sm:table-cell">
+                  {d.latest ? <SignalBars rssi={d.latest.rssiDbm} /> : "—"}
                 </td>
                 <td className="tnum px-2 py-1.5 text-right font-mono text-ink-dim">
                   {d.latest ? d.latest.values.temperature_c.toFixed(1) : "—"}

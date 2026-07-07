@@ -1,12 +1,34 @@
 "use client";
 
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { HAZARDS } from "@/lib/sim/hazards";
-import type { DataEngine, HazardKind, Incident } from "@/lib/sim/types";
-import { METRIC_LABELS } from "@/lib/sim/types";
+import type { DataEngine, DeviceView, HazardKind, Incident } from "@/lib/sim/types";
+import { METRIC_LABELS, METRIC_UNITS } from "@/lib/sim/types";
 import { HazardIcon } from "./icons";
-import { EmptyState, IncidentStatusBadge, Panel, RISK_COLORS, SeverityBadge, fmtTime } from "./ui";
+import {
+  EmptyState,
+  IncidentStatusBadge,
+  Panel,
+  RISK_COLORS,
+  SeverityBadge,
+  Sparkline,
+  fmtRelative,
+  fmtTime,
+} from "./ui";
+
+/** Risk trend for the incident's device: sparkline values + direction. */
+function riskTrend(engine: DataEngine, deviceId: string): { values: number[]; dir: -1 | 0 | 1 } {
+  const values = engine
+    .getSeries(deviceId)
+    .slice(-40)
+    .map((r) => r.riskScore);
+  if (values.length < 10) return { values, dir: 0 };
+  const recent = values.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const prior = values.slice(-10, -5).reduce((a, b) => a + b, 0) / 5;
+  return { values, dir: recent - prior > 3 ? 1 : prior - recent > 3 ? -1 : 0 };
+}
 
 function ActionButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
@@ -32,6 +54,7 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
 
   return (
     <div className="mt-1 space-y-2 rounded-lg border border-edge-soft bg-panel-2/60 p-2">
+      <p className="text-[11px] leading-snug text-ink-dim">{inc.summary}</p>
       {series.length > 2 && (
         <div>
           <div className="mb-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">
@@ -70,18 +93,22 @@ function IncidentDetail({ engine, inc }: { engine: DataEngine; inc: Incident }) 
   );
 }
 
-type StatusFilter = "all" | "active" | "closed";
+type StatusFilter = "all" | "critical" | "warning" | "closed";
 
 export function IncidentQueue({
   accent,
   engine,
   incidents,
+  devices,
+  now,
   frozen,
   onSelectDevice,
 }: {
   accent?: string;
   engine: DataEngine;
   incidents: Incident[];
+  devices: DeviceView[];
+  now: number;
   frozen: boolean;
   onSelectDevice: (id: string) => void;
 }) {
@@ -91,6 +118,9 @@ export function IncidentQueue({
 
   const active = incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed");
   const closed = incidents.filter((i) => i.status === "resolved" || i.status === "dismissed");
+  const critical = active.filter((i) => i.severity === "critical");
+  const warning = active.filter((i) => i.severity !== "critical");
+  const deviceById = useMemo(() => new Map(devices.map((d) => [d.deviceId, d])), [devices]);
 
   const hazardsPresent = useMemo(
     () => [...new Set(incidents.map((i) => i.hazard))] as HazardKind[],
@@ -98,8 +128,21 @@ export function IncidentQueue({
   );
 
   let visible =
-    statusFilter === "active" ? active : statusFilter === "closed" ? closed.slice(0, 30) : [...active, ...closed.slice(0, 8)];
+    statusFilter === "critical"
+      ? critical
+      : statusFilter === "warning"
+        ? warning
+        : statusFilter === "closed"
+          ? closed.slice(0, 30)
+          : [...active, ...closed.slice(0, 8)];
   if (hazardFilter !== "all") visible = visible.filter((i) => i.hazard === hazardFilter);
+
+  const tabs: Array<{ id: StatusFilter; label: string; count: number; tone?: string }> = [
+    { id: "all", label: "all", count: active.length },
+    { id: "critical", label: "crit", count: critical.length, tone: "text-crit" },
+    { id: "warning", label: "warn", count: warning.length, tone: "text-warn" },
+    { id: "closed", label: "closed", count: closed.length },
+  ];
 
   return (
     <Panel
@@ -107,16 +150,16 @@ export function IncidentQueue({
       accent={accent}
       right={
         <div className="flex items-center gap-1 font-mono text-[10px]">
-          {(["all", "active", "closed"] as const).map((f) => (
+          {tabs.map((t) => (
             <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
+              key={t.id}
+              onClick={() => setStatusFilter(t.id)}
               className={`rounded px-1.5 py-0.5 uppercase transition-colors ${
-                statusFilter === f ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
+                statusFilter === t.id ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
               }`}
             >
-              {f}
-              {f === "active" && active.length > 0 && <span className="ml-1 opacity-70">{active.length}</span>}
+              {t.label}
+              {t.count > 0 && <span className={`ml-1 opacity-80 ${t.tone ?? ""}`}>{t.count}</span>}
             </button>
           ))}
           {hazardsPresent.length > 1 && (
@@ -145,7 +188,12 @@ export function IncidentQueue({
         </EmptyState>
       )}
       <ul className="divide-y divide-edge-soft/60">
-        {visible.map((inc) => (
+        {visible.map((inc) => {
+          const isOpen = inc.status !== "resolved" && inc.status !== "dismissed";
+          const trend = isOpen ? riskTrend(engine, inc.deviceId) : null;
+          const latest = deviceById.get(inc.deviceId)?.latest ?? null;
+          const chips = isOpen && latest ? latest.contributions.filter((c) => !c.quarantined).slice(0, 2) : [];
+          return (
           <li
             key={inc.id}
             className="cursor-pointer space-y-1.5 px-3 py-2.5 transition-colors hover:bg-panel-2/50"
@@ -156,7 +204,12 @@ export function IncidentQueue({
               <span title={HAZARDS[inc.hazard].label}><HazardIcon kind={inc.hazard} size={14} /></span>
               <SeverityBadge severity={inc.severity} />
               <IncidentStatusBadge status={inc.status} />
-              <span className="tnum ml-auto font-mono text-[11px] text-ink-dim">risk {inc.riskScore}</span>
+              <span className="ml-auto flex items-center gap-1.5">
+                {trend && trend.values.length > 1 && (
+                  <Sparkline values={trend.values} color={RISK_COLORS[inc.severity]} width={56} height={16} />
+                )}
+                <span className="tnum font-mono text-[11px] text-ink-dim">risk {inc.riskScore}</span>
+              </span>
             </div>
             <button
               className="block text-left text-xs font-medium text-ink hover:text-accent"
@@ -167,11 +220,37 @@ export function IncidentQueue({
             >
               {inc.title}
             </button>
-            <p className="text-[11px] leading-snug text-ink-dim">{inc.summary}</p>
+            {(chips.length > 0 || trend) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {chips.map((c) => (
+                  <span
+                    key={c.metric}
+                    className="tnum rounded bg-panel-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-dim"
+                  >
+                    {METRIC_LABELS[c.metric]} {c.value.toFixed(1)} {METRIC_UNITS[c.metric]}
+                  </span>
+                ))}
+                {trend && trend.dir === 1 && (
+                  <span className="inline-flex items-center gap-0.5 font-mono text-[10px] text-crit">
+                    <TrendingUp size={11} aria-hidden /> rising
+                  </span>
+                )}
+                {trend && trend.dir === -1 && (
+                  <span className="inline-flex items-center gap-0.5 font-mono text-[10px] text-ok">
+                    <TrendingDown size={11} aria-hidden /> easing
+                  </span>
+                )}
+                {trend && trend.dir === 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-mono text-[10px] text-ink-dim">
+                    <Minus size={11} aria-hidden /> steady
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
-              <span className="mr-auto font-mono text-[10px] text-ink-dim">
-                opened {fmtTime(inc.openedAt)}
-                {inc.closedAt ? ` · closed ${fmtTime(inc.closedAt)}` : ""}
+              <span className="mr-auto font-mono text-[10px] text-ink-dim" title={fmtTime(inc.openedAt)}>
+                opened {fmtRelative(now, inc.openedAt)}
+                {inc.closedAt ? ` · closed ${fmtRelative(now, inc.closedAt)}` : ""}
               </span>
               {!frozen && (
                 <>
@@ -194,7 +273,8 @@ export function IncidentQueue({
             </div>
             {expandedId === inc.id && <IncidentDetail engine={engine} inc={inc} />}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </Panel>
   );

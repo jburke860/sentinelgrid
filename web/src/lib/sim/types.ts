@@ -74,6 +74,8 @@ export interface RegionView extends RegionSpec {
 export interface DeviceSpec {
   deviceId: string;
   displayName: string;
+  /** Nearest town, e.g. "Tucson, AZ". Absent in live mode (API payloads). */
+  locality?: string;
   regionId: string;
   kind: DeviceKind;
   lat: number;

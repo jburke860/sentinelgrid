@@ -74,6 +74,8 @@ test("incident detail opens from the queue", async ({ page }) => {
   await page.goto("/");
   const incident = page.locator("li", { hasText: "INC-" }).first();
   await incident.waitFor({ timeout: 30_000 });
-  await incident.click();
+  // Click the incident key (not the card center — that hits the title button,
+  // which selects the device rather than expanding the card).
+  await incident.locator("span", { hasText: "INC-" }).first().click();
   await expect(page.getByText("Timeline")).toBeVisible();
 });

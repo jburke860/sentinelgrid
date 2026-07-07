@@ -8,11 +8,13 @@ import { DeviceDrawer } from "@/components/DeviceDrawer";
 import { DeviceTable } from "@/components/DeviceTable";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { IncidentQueue } from "@/components/IncidentQueue";
+import { KpiStrip, type KpiPoint } from "@/components/KpiStrip";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
+import { SideRail, type View } from "@/components/SideRail";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { TopBar } from "@/components/TopBar";
-import { Panel } from "@/components/ui";
+import { Panel, fmtDuration } from "@/components/ui";
 import { LiveEngine } from "@/lib/liveClient";
 import { SimEngine } from "@/lib/sim/engine";
 import { FLEET, REGIONS } from "@/lib/sim/fleet";
@@ -29,8 +31,7 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 });
 
 const STEP_MS = 30_000;
-
-type MobileTab = "map" | "incidents" | "devices" | "analysis";
+const KPI_HISTORY = 40;
 
 function chime() {
   try {
@@ -62,7 +63,21 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [alertsOn, setAlertsOn] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mobileTab, setMobileTab] = useState<MobileTab>("map");
+  const [view, setView] = useState<View>("overview");
+  const bootAt = useRef(Date.now());
+
+  // Short ring buffer of fleet KPIs so the header strip can show trends.
+  const kpiHistory = useRef<KpiPoint[]>([]);
+  useEffect(() => {
+    const online = snap.devices.filter((d) => d.status !== "offline").length;
+    const open = snap.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length;
+    const peak = Math.max(0, ...snap.devices.map((d) => (d.status === "offline" ? 0 : (d.latest?.riskScore ?? 0))));
+    const buf = kpiHistory.current;
+    if (buf.length === 0 || buf[buf.length - 1].t !== snap.simTime) {
+      buf.push({ t: snap.simTime, online, open, peak });
+      if (buf.length > KPI_HISTORY) buf.splice(0, buf.length - KPI_HISTORY);
+    }
+  }, [snap]);
 
   useEffect(() => {
     writeUrlState({ regionId, deviceId: selectedId });
@@ -85,7 +100,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
   // Historical view while scrubbing; live snapshot otherwise.
   const frozen = viewTime !== null;
-  const view = useMemo(
+  const viewData = useMemo(
     () => (frozen ? engine.snapshotAt(viewTime!) : snap),
     [engine, frozen, viewTime, snap],
   );
@@ -182,10 +197,10 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
 
-  const scopedDevices = regionId ? view.devices.filter((d) => d.regionId === regionId) : view.devices;
-  const scopedIncidents = regionId ? view.incidents.filter((i) => i.regionId === regionId) : view.incidents;
-  const selected = view.devices.find((d) => d.deviceId === selectedId) ?? null;
-  const drawerDevice = drawerId ? (view.devices.find((d) => d.deviceId === drawerId) ?? null) : null;
+  const scopedDevices = regionId ? viewData.devices.filter((d) => d.regionId === regionId) : viewData.devices;
+  const scopedIncidents = regionId ? viewData.incidents.filter((i) => i.regionId === regionId) : viewData.incidents;
+  const selected = viewData.devices.find((d) => d.deviceId === selectedId) ?? null;
+  const drawerDevice = drawerId ? (viewData.devices.find((d) => d.deviceId === drawerId) ?? null) : null;
   const regionName = regionId
     ? (snap.regions.find((r) => r.id === regionId)?.name ?? "")
     : "National Overview";
@@ -193,36 +208,74 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     (i) => i.status !== "resolved" && i.status !== "dismissed",
   ).length;
 
-  const tabClass = (t: MobileTab) => `${mobileTab === t ? "flex" : "hidden"} lg:flex`;
-  const tabs: Array<{ id: MobileTab; label: string; badge?: number }> = [
-    { id: "map", label: "Map" },
+  // Per-view grid placement for each panel. Below lg only the view's primary
+  // panel(s) show; on lg the view arranges its panel set across the 12-col grid.
+  const LAYOUTS: Record<View, Record<string, string>> = {
+    overview: {
+      map: "flex lg:col-span-8 lg:row-span-4",
+      incidents: "hidden lg:flex lg:col-span-4 lg:row-span-4",
+      devices: "hidden lg:flex lg:col-span-4 lg:row-span-2",
+      telemetry: "hidden lg:flex lg:col-span-4 lg:row-span-2",
+      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-2",
+    },
+    incidents: {
+      map: "hidden",
+      incidents: "flex lg:col-span-8 lg:row-span-6",
+      devices: "hidden",
+      telemetry: "hidden",
+      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-6",
+    },
+    nodes: {
+      map: "hidden",
+      incidents: "hidden",
+      devices: "flex lg:col-span-8 lg:row-span-6",
+      telemetry: "hidden lg:flex lg:col-span-4 lg:row-span-3",
+      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-3",
+    },
+    analytics: {
+      map: "hidden",
+      incidents: "hidden",
+      devices: "hidden",
+      telemetry: "flex lg:col-span-7 lg:row-span-6",
+      anomaly: "flex lg:col-span-5 lg:row-span-6",
+    },
+  };
+  const panelClass = (panel: string) => LAYOUTS[view][panel];
+
+  const onlineCount = snap.devices.filter((d) => d.status !== "offline").length;
+  const readingsPerMin = onlineCount * (snap.mode === "sim" ? 40 * snap.speed : 30);
+  const views: Array<{ id: View; label: string; badge?: number }> = [
+    { id: "overview", label: "Overview" },
     { id: "incidents", label: "Incidents", badge: openCount },
-    { id: "devices", label: "Devices" },
-    { id: "analysis", label: "Analysis" },
+    { id: "nodes", label: "Nodes" },
+    { id: "analytics", label: "Analytics" },
   ];
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      <TopBar
-        engine={engine}
-        snap={snap}
-        regionId={regionId}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        alertsOn={alertsOn}
-        onToggleAlerts={toggleAlerts}
-        onOpenAbout={() => setAboutOpen(true)}
-        onSelectRegion={selectRegion}
-      />
+      <header className="shrink-0">
+        <TopBar
+          engine={engine}
+          snap={snap}
+          regionId={regionId}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          alertsOn={alertsOn}
+          onToggleAlerts={toggleAlerts}
+          onOpenAbout={() => setAboutOpen(true)}
+          onSelectRegion={selectRegion}
+        />
+        <KpiStrip snap={snap} history={kpiHistory.current} onSelectRegion={selectRegion} />
+      </header>
 
-      {/* Mobile tab bar: below lg every panel becomes a full-height tab. */}
+      {/* Mobile view switcher: below lg the side rail collapses into tabs. */}
       <nav className="flex shrink-0 gap-1 border-b border-edge bg-panel px-2 py-1.5 lg:hidden">
-        {tabs.map((t) => (
+        {views.map((t) => (
           <button
             key={t.id}
-            onClick={() => setMobileTab(t.id)}
+            onClick={() => setView(t.id)}
             className={`flex-1 rounded-md px-2 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-              mobileTab === t.id ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
+              view === t.id ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
             }`}
           >
             {t.label}
@@ -241,8 +294,10 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           <span className="animate-pulse font-mono text-xs text-ink-dim">connecting to live API…</span>
         </main>
       ) : (
+      <div className="flex min-h-0 flex-1">
+      <SideRail view={view} onChange={setView} openIncidents={openCount} onOpenAbout={() => setAboutOpen(true)} />
       <main className="grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-2 overflow-hidden p-2 lg:grid-cols-12 lg:grid-rows-6">
-        <div className={`${tabClass("map")} min-h-0 lg:col-span-8 lg:row-span-4`}>
+        <div className={`${panelClass("map")} min-h-0`}>
           <ErrorBoundary label="Map">
             <Panel
               title={`Live Fleet Map — ${regionName}${frozen ? " (playback)" : ""}`}
@@ -260,8 +315,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
             >
               <MapView
                 theme={theme}
-                devices={view.devices}
-                incidents={view.incidents}
+                devices={viewData.devices}
+                incidents={viewData.incidents}
                 regions={snap.regions}
                 scenarios={frozen ? [] : snap.scenarios}
                 selectedRegion={regionId}
@@ -273,19 +328,21 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           </ErrorBoundary>
         </div>
 
-        <div className={`${tabClass("incidents")} min-h-0 lg:col-span-4 lg:row-span-4`}>
+        <div className={`${panelClass("incidents")} min-h-0`}>
           <ErrorBoundary label="Incident queue">
             <IncidentQueue
               accent="#ef4444"
               engine={engine}
               incidents={scopedIncidents}
+              devices={viewData.devices}
+              now={frozen ? viewTime! : snap.simTime}
               frozen={frozen}
               onSelectDevice={inspectDevice}
             />
           </ErrorBoundary>
         </div>
 
-        <div className={`${tabClass("devices")} min-h-0 lg:col-span-4 lg:row-span-2`}>
+        <div className={`${panelClass("devices")} min-h-0`}>
           <ErrorBoundary label="Device table">
             <DeviceTable
               accent="#10b981"
@@ -298,7 +355,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           </ErrorBoundary>
         </div>
 
-        <div className={`${tabClass("analysis")} min-h-0 lg:col-span-4 lg:row-span-2`}>
+        <div className={`${panelClass("telemetry")} min-h-0`}>
           <ErrorBoundary label="Telemetry chart">
             <TelemetryChart
               accent="#a855f7"
@@ -311,27 +368,41 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           </ErrorBoundary>
         </div>
 
-        <div className={`${tabClass("analysis")} min-h-0 lg:col-span-4 lg:row-span-2`}>
+        <div className={`${panelClass("anomaly")} min-h-0`}>
           <ErrorBoundary label="Anomaly panel">
-            <AnomalyPanel accent="#f59e0b" device={selected} events={view.events} />
+            <AnomalyPanel accent="#f59e0b" device={selected} events={viewData.events} />
           </ErrorBoundary>
         </div>
       </main>
+      </div>
       )}
 
       <TimeScrubber snap={snap} viewTime={viewTime} onScrub={setViewTime} />
-      <footer className="hidden shrink-0 border-t border-edge bg-panel px-4 py-1.5 text-center font-mono text-[10px] text-ink-dim sm:block">
-        SentinelGrid demo — {FLEET.length} virtual nodes, {REGIONS.length} US regions, simulated in your browser (seeded,
-        deterministic{snap.replay && snap.liveAnchorAt ? `, baselines anchored to NWS/USGS observations from ${snap.liveAnchorAt.slice(0, 10)}` : ""}).
-        Created by <span className="text-ink">Jeremy Burke</span> ·{" "}
-        <a
-          href="https://github.com/jburke860/sentinelgrid"
-          className="text-accent hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          source on GitHub
-        </a>
+      <footer className="hidden shrink-0 items-center gap-4 border-t border-edge bg-panel px-4 py-1.5 font-mono text-[10px] text-ink-dim sm:flex">
+        <span className="inline-flex items-center gap-1.5" title="Baseline data feeds">
+          <span className={`h-1.5 w-1.5 rounded-full ${snap.replay && snap.liveAnchorAt ? "bg-ok" : "bg-edge"}`} />
+          {snap.replay && snap.liveAnchorAt
+            ? `NWS · USGS anchors ${snap.liveAnchorAt.slice(0, 10)}`
+            : "synthetic baselines"}
+        </span>
+        <span className="tnum" title="Telemetry throughput at the current speed">
+          {readingsPerMin.toLocaleString()} readings/min
+        </span>
+        <span className="tnum" title="Time since the engine booted">up {fmtDuration(Date.now() - bootAt.current)}</span>
+        <span className="tnum hidden md:inline">
+          {FLEET.length} nodes · {REGIONS.length} regions · seeded, deterministic
+        </span>
+        <span className="ml-auto">
+          Created by <span className="text-ink">Jeremy Burke</span> ·{" "}
+          <a
+            href="https://github.com/jburke860/sentinelgrid"
+            className="text-accent hover:underline"
+            target="_blank"
+            rel="noreferrer"
+          >
+            source on GitHub
+          </a>
+        </span>
       </footer>
 
       {drawerDevice && (
