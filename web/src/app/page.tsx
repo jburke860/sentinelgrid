@@ -186,8 +186,19 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         },
       },
       {
-        text: "Each node scores its readings against learned baselines. Coastal nodes feel the surge hardest — watch the coast light up. The radar and warning polygons behind it are real, live data.",
+        text: "Each node scores its readings against learned baselines — coastal nodes feel the surge hardest. We've selected the hottest node so every panel follows it. The radar and warnings behind it are real, live data.",
         hold: 11000,
+        run: () => {
+          // Select the highest-risk gulf node (flagships preferred — they
+          // carry full history) so telemetry/anomaly/fingerprint populate.
+          const s = engine.getSnapshot();
+          const hottest = (pool: typeof s.devices) =>
+            pool
+              .filter((d) => d.regionId === "gulf" && d.status !== "offline" && d.latest)
+              .sort((a, b) => (b.latest?.riskScore ?? 0) - (a.latest?.riskScore ?? 0))[0];
+          const top = hottest(s.devices) ?? hottest(s.mesh);
+          if (top) selectDevice(top.deviceId);
+        },
       },
       {
         text: "Sustained anomalies open incidents. The queue triages them: acknowledge, investigate, resolve — with playbooks in the situation summary.",
