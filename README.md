@@ -1,17 +1,42 @@
 # SentinelGrid
 
-SentinelGrid is a local-first edge telemetry platform for climate-risk monitoring. It uses virtual sensor nodes instead of physical hardware, then builds the same kind of software surface a real system would need: MQTT ingestion, geospatial storage, anomaly scoring, data-quality checks, and an operator dashboard.
+SentinelGrid is a local-first edge telemetry platform for climate-risk monitoring. It uses virtual sensor nodes instead of physical hardware, then builds the same kind of software surface a real system would need: MQTT ingestion, geospatial storage, anomaly scoring, data-quality checks, and a national operations console — overlaid with genuinely live public data (NEXRAD radar, ~3,700 real NWS/USGS stations, active warning polygons, earthquakes).
 
 **Live demo:** [sentinelgrid-two.vercel.app](https://sentinelgrid-two.vercel.app) · created by Jeremy Burke
 
-![SentinelGrid operator dashboard (light theme)](docs/images/dashboard-light.png)
-
-<details>
-<summary>Dark theme</summary>
-
 ![SentinelGrid operator dashboard (dark theme)](docs/images/dashboard-dark.png)
 
+<details>
+<summary>Light theme</summary>
+
+![SentinelGrid operator dashboard (light theme)](docs/images/dashboard-light.png)
+
 </details>
+
+## Dashboard highlights
+
+- **Two-tier simulated fleet** — 150 flagship stations (full history, drift
+  quarantine, incidents) + a 3,000-node procedural mesh (population-weighted
+  around real metros, stateless: history regenerates deterministically on
+  demand). ~46k readings/min, tick cost ~3 ms, CI-gated.
+- **Real data next to the sim, never blended with it** — live NEXRAD radar,
+  ~2,300 NWS/ASOS weather stations + ~1,400 USGS stream gauges (refreshed by
+  CI, weather stations z-scored against regional baselines, gauges honestly
+  unscored), live NWS storm-based warning polygons, and past-day earthquakes.
+  Real layers are LIVE-badged and solid; simulated overlays stay dashed.
+- **Zoom-driven map** — scroll in and the nearest region auto-selects, scroll
+  out for the national view; layers panel, satellite basemap, fullscreen,
+  playback scrubber docked on the map with -24h/-6h/-1h jumps.
+- **Honest analytics** — anomaly fingerprint radar + hazard pattern matching,
+  telemetry with a reconstructed baseline ±2σ corridor, a rule-based
+  situation summary with response playbooks, an event-decay forecast, and a
+  model-confidence panel synthesized from observable scoring state. Every
+  number on screen derives from the model — nothing is decorative.
+- **Ops ergonomics** — ⌘K command palette over 3,150+ nodes/regions/actions,
+  saved views with copyable share links, full UI state in the URL hash,
+  printable situation reports, keyboard shortcuts, dual theme.
+- **Physics with siting** — coastal nodes feel surge, ridges feel wind,
+  washes flood, forests smoke; diurnal baselines run on region-local time.
 
 The project is intentionally designed around free tools:
 
@@ -64,10 +89,12 @@ Next.js dashboard ---> FastAPI query endpoints ---> PostgreSQL/PostGIS
 ## Two Ways to Run It
 
 **Hosted demo (sim mode).** `web/` is the operator dashboard, deployable as a
-static site with zero backend: a deterministic in-browser engine simulates 150
-virtual nodes across 16 US regions, scores anomalies with the same z-score
-model as the worker, and drives the incident queue. Baselines can anchor to
-real NWS/USGS observations baked in at build time and refreshed daily by CI.
+static site with zero backend: a deterministic in-browser engine simulates
+3,150 virtual nodes (150 flagship + 3,000 mesh) across 16 US regions, scores
+anomalies with the same z-score model as the worker, and drives the incident
+queue. Baselines anchor to real NWS/USGS observations refreshed daily by CI,
+and the verified-stations snapshot (~3,700 real stations) refreshes four
+times a day.
 
 ```sh
 cd web
