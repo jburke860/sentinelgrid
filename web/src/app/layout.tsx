@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 const description =
-  "Live demo of SentinelGrid, a local-first edge telemetry platform for climate-risk monitoring: 150 flagship sensor nodes plus a 3,000-node simulated mesh across 16 US regions with anomaly scoring, incident response, and playback — simulated in your browser.";
+  "Live demo of SentinelGrid, a local-first edge telemetry platform for climate-risk monitoring: 174 flagship sensor nodes plus a 4,000-node simulated mesh across 19 US regions with anomaly scoring, incident response, and playback — simulated in your browser.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://sentinelgrid-two.vercel.app"),

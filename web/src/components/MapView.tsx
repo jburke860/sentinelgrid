@@ -236,7 +236,7 @@ function HeatLayer({
 /**
  * Mesh tier renderer: thousands of nodes as cheap canvas dots with viewport
  * culling. Managed imperatively (a Leaflet marker pool on one shared canvas
- * renderer) — mounting 3,000 react-leaflet components per tick would swamp
+ * renderer) — mounting 4,000 react-leaflet components per tick would swamp
  * React, so React only owns this component, not the dots.
  */
 const MESH_CAP = 700;

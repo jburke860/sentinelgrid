@@ -119,7 +119,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
         .filter((c) => c.s >= 0)
         .sort((a, b) => b.s - a.s);
     }
-    // Cap each group so 150 nodes can't drown the actions.
+    // Cap each group so 4,000+ nodes can't drown the actions.
     const seen = new Map<string, number>();
     return pool.filter((c) => {
       const n = (seen.get(c.group) ?? 0) + 1;

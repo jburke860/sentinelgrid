@@ -19,8 +19,8 @@ over every node, region, incident, and action.
 
 - zoom-driven navigation: scrolling in auto-selects the nearest of 16 US
   regions, scrolling out returns to the national view — no clicks needed
-- two simulated tiers: 150 flagship nodes as numbered risk badges + a
-  3,000-node procedural mesh as culled canvas dots; risk + per-metric anomaly
+- two simulated tiers: 174 flagship nodes as numbered risk badges + a
+  4,000-node procedural mesh as culled canvas dots; risk + per-metric anomaly
   heat layers interpolate across all of them
 - **real live layers** (LIVE-badged; simulated overlays stay dashed): NEXRAD
   weather radar, ~3,700 verified NWS/USGS stations (clickable — real
@@ -81,10 +81,10 @@ over every node, region, incident, and action.
 - Seeded PRNG (seed 42): repeatable runs, mirroring `edge-sim`'s determinism
   requirement. Each real 1.5 s tick advances 30 s of sim time; ~1 h of history
   is backfilled on load.
-- **Two tiers**: 150 flagship nodes carry full state (EWMA drift baselines,
+- **Two tiers**: 174 flagship nodes carry full state (EWMA drift baselines,
   incidents, typed-array history rings — a stored reading costs ~54 bytes;
   feature contributions are reconstructed on demand by inverting values
-  against baselines). The 3,000-node mesh (`src/lib/sim/mesh.ts`) is
+  against baselines). The 4,000-node mesh (`src/lib/sim/mesh.ts`) is
   stateless: each reading is a pure function of (node, cohort round, active
   scenarios), stepped in thirds per tick, with ~6 h of history regenerated
   deterministically when a node is opened.

@@ -180,7 +180,7 @@ export function HelpHub({
                   </Feature>
                   <Feature name="Playback">
                     drag the scrubber docked on the map (or <Kbd>←</Kbd>/<Kbd>→</Kbd>); -24h/-6h/-1h jump chips;
-                    all 3,150 sim nodes replay any moment of the last 24h
+                    all 4,174 sim nodes replay any moment of the last 24h
                   </Feature>
                   <Feature name="Scenarios">
                     inject any hazard from the top bar (or ⌘K), or play a scripted multi-region event replay;
@@ -221,7 +221,7 @@ export function HelpHub({
               <Section title="Everywhere">
                 <ul className="space-y-1">
                   <Feature name="⌘K palette">
-                    fuzzy search across 3,150+ nodes, regions, incidents, and actions
+                    fuzzy search across 4,100+ nodes, regions, incidents, and actions
                   </Feature>
                   <Feature name="Saved views">
                     <Kbd>views</Kbd> in the top bar — presets like Storm Watch, plus copy-link sharing; the full

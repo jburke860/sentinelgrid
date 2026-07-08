@@ -27,7 +27,8 @@ export function PrintReport({ snap }: { snap: SimSnapshot }) {
 
       <h2 className="mb-1 text-sm font-bold">Fleet health</h2>
       <p className="mb-4">
-        {online}/{snap.devices.length} nodes online ({degraded} degraded, {snap.devices.length - online} offline) ·
+        {online}/{snap.devices.length} flagship nodes online ({degraded} degraded,{" "}
+        {snap.devices.length - online} offline) · {snap.mesh.length.toLocaleString()} mesh nodes reporting ·
         peak risk {peak} · {open.length} open incident{open.length === 1 ? "" : "s"} ·{" "}
         {snap.scenarios.filter((s) => s.kind !== "dropout").length} active hazard system(s)
         {snap.replay && snap.liveAnchorAt ? ` · baselines anchored to NWS/USGS ${snap.liveAnchorAt.slice(0, 10)}` : ""}

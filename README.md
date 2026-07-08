@@ -16,8 +16,8 @@ SentinelGrid is a local-first edge telemetry platform for climate-risk monitorin
 
 ## Dashboard highlights
 
-- **Two-tier simulated fleet** — 150 flagship stations (full history, drift
-  quarantine, incidents) + a 3,000-node procedural mesh (population-weighted
+- **Two-tier simulated fleet** — 174 flagship stations (full history, drift
+  quarantine, incidents) + a 4,000-node procedural mesh (population-weighted
   around real metros, stateless: history regenerates deterministically on
   demand). ~46k readings/min, tick cost ~3 ms, CI-gated.
 - **Real data next to the sim, never blended with it** — live NEXRAD radar,
@@ -33,7 +33,7 @@ SentinelGrid is a local-first edge telemetry platform for climate-risk monitorin
   situation summary with response playbooks, an event-decay forecast, and a
   model-confidence panel synthesized from observable scoring state. Every
   number on screen derives from the model — nothing is decorative.
-- **Ops ergonomics** — ⌘K command palette over 3,150+ nodes/regions/actions,
+- **Ops ergonomics** — ⌘K command palette over 4,100+ nodes/regions/actions,
   saved views with copyable share links, full UI state in the URL hash,
   printable situation reports, keyboard shortcuts, dual theme.
 - **Physics with siting** — coastal nodes feel surge, ridges feel wind,
@@ -91,7 +91,7 @@ Next.js dashboard ---> FastAPI query endpoints ---> PostgreSQL/PostGIS
 
 **Hosted demo (sim mode).** `web/` is the operator dashboard, deployable as a
 static site with zero backend: a deterministic in-browser engine simulates
-3,150 virtual nodes (150 flagship + 3,000 mesh) across 16 US regions, scores
+4,174 virtual nodes (174 flagship + 4,000 mesh) across 19 US regions, scores
 anomalies with the same z-score model as the worker, and drives the incident
 queue. Baselines anchor to real NWS/USGS observations refreshed daily by CI,
 and the verified-stations snapshot (~3,700 real stations) refreshes four
@@ -171,15 +171,15 @@ fresh volumes and a matching Alembic revision for existing databases.
 
 ## Fleet
 
-Two simulated tiers: 150 hand-placed flagship nodes with full history,
-incidents, and drift-quarantine state, plus a 3,000-node procedural mesh
+Two simulated tiers: 174 hand-placed flagship nodes with full history,
+incidents, and drift-quarantine state, plus a 4,000-node procedural mesh
 (population-weighted around real metros; latest reading only, history
 regenerated deterministically on demand) that gives the national map its
-density. Flagships span 16 regions (Southern California, Northern California,
+density. Flagships span 19 regions (Southern California, Northern California,
 Pacific Northwest, Desert Southwest, Great Basin & Wasatch, Colorado Front
 Range, Texas Triangle, Gulf Coast, Florida Peninsula, Carolinas & Georgia,
 Mississippi Valley, Southern Plains, Upper Midwest, Great Lakes, Mid-Atlantic,
-Northeast Corridor), each with region-appropriate hazard profiles: wildfire,
+Northeast Corridor, Northern Rockies, Appalachia, Northern New England), each with region-appropriate hazard profiles: wildfire,
 flood, hurricane, extreme heat, tornado, winter storm, air quality. Devices are seeded from `db/seeds/devices.json`, which is
 the shared source of truth for the browser sim, the C++ publisher, and the
 database.

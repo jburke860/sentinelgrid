@@ -169,7 +169,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     setHelpTab(null);
     const steps: Array<{ text: string; hold: number; run?: () => void }> = [
       {
-        text: "This is SentinelGrid: 3,150 simulated sensors plus ~3,700 real NWS/USGS stations on one national map.",
+        text: "This is SentinelGrid: 4,174 simulated sensors plus ~3,700 real NWS/USGS stations on one national map.",
         hold: 7000,
         run: () => {
           setViewTime(null);
@@ -200,7 +200,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         run: () => setView("analytics"),
       },
       {
-        text: "And every moment replays: scrubbing back reconstructs all 3,000 mesh nodes deterministically — no stored history.",
+        text: "And every moment replays: scrubbing back reconstructs all 4,000 mesh nodes deterministically — no stored history.",
         hold: 9000,
         run: () => {
           setView("overview");

@@ -20,6 +20,9 @@ const REGION_SOURCES = {
   pnw: { nws: "KSEA", usgs: "12144500" }, // Snoqualmie River
   southwest: { nws: "KPHX", usgs: null },
   mountainwest: { nws: "KSLC", usgs: null },
+  northrockies: { nws: "KBIL", usgs: null },
+  appalachia: { nws: "KCRW", usgs: null },
+  newengland: { nws: "KPWM", usgs: null },
   rockies: { nws: "KDEN", usgs: "06730200" }, // Boulder Creek
   texas: { nws: "KAUS", usgs: null },
   gulf: { nws: "KHOU", usgs: "08074000" }, // Buffalo Bayou

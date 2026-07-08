@@ -20,19 +20,19 @@ blended with the simulation.
 | Area | File(s) | What to look for |
 | --- | --- | --- |
 | Simulation engine | `web/src/lib/sim/engine.ts` | The whole state machine: scenario lifecycle, z-score risk model, drift quarantine, incident lifecycle, two-tier fleet stepping |
-| Mesh tier | `web/src/lib/sim/mesh.ts` + engine | 3,000 nodes whose readings are **pure functions** of (node, tick, scenario records) — no stored state |
+| Mesh tier | `web/src/lib/sim/mesh.ts` + engine | 4,000 nodes whose readings are **pure functions** of (node, tick, scenario records) — no stored state |
 | History storage | `web/src/lib/sim/histring.ts` | Typed-array ring buffers, ~54 bytes/reading; contributions reconstructed on demand by inverting values against baselines |
 | Shared model | `web/src/lib/sim/baselines.ts`, `hazards.ts` | Baseline climatology (region-local time), hazard signatures, kind-aware sensitivity, `hazardMatches` |
 | Real-data feeds | `web/src/lib/liveFeeds.ts`, `web/scripts/fetch-stations.mjs` | Bulk NWS/USGS ingestion, honest partial scoring, graceful degradation |
 | Map at scale | `web/src/components/MapView.tsx` | Shared-canvas dot rendering with viewport culling, zoom-driven region sync, point-in-polygon alert hit-testing |
 | Backend | `api/`, `worker/`, `edge-sim/` | FastAPI ingest + SSE, Python scoring/rollups/archival (z-score + IsolationForest), C++ publisher |
-| Tests | `web/src/lib/sim/*.test.ts`, `web/e2e/` | 27 unit (incl. perf gates) + 11 Playwright e2e |
+| Tests | `web/src/lib/sim/*.test.ts`, `web/e2e/` | 27 unit (incl. perf gates) + 12 Playwright e2e |
 
 ## Five design decisions worth interrogating
 
 1. **The mesh is stateless by construction.** A mesh reading =
    `f(nodeIndex, cohortRound, scenarioLog)` with hash-derived noise. That one
-   decision buys: 3,000 nodes for ~5 MB, on-demand history charts with zero
+   decision buys: 4,000 nodes for ~7 MB, on-demand history charts with zero
    storage, and bit-for-bit playback of any moment in the last 24 h —
    including storms that have already dissipated (a ~50-entry completed-
    scenario log makes back-casting exact). There's a unit test that captures
@@ -58,7 +58,7 @@ blended with the simulation.
    reproducible enough to assert exact values, not just shapes.
 
 5. **Perf is CI-gated, not aspirational.** A vitest gate (boot < 2.5 s,
-   tick < 15 ms at 3,150 nodes; actual ≈ 100 ms / 3 ms) and a Playwright
+   tick < 15 ms at 4,174 nodes; actual ≈ 100 ms / 3 ms) and a Playwright
    smoke (`#perf=1` overlay: tick budget, bounded DOM marker count) fail the
    build on density regressions.
 
@@ -93,6 +93,6 @@ blended with the simulation.
 
 ```sh
 cd web && npm install && npm run dev   # dashboard, sim mode
-npm test && npx playwright test        # 27 unit + 11 e2e
+npm test && npx playwright test        # 27 unit + 12 e2e
 make stack-up && make bridge-run       # full backend stack (Docker)
 ```
