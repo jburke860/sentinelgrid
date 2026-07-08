@@ -45,8 +45,10 @@ interface LayerState {
   quakes: boolean;
 }
 
+// Default view keeps the map clean: node dots + live radar/warnings/quakes,
+// with the heat fields and station rings opt-in.
 const DEFAULT_LAYERS: LayerState = {
-  risk: true,
+  risk: false,
   temperature: false,
   air: false,
   wind: false,
@@ -55,7 +57,7 @@ const DEFAULT_LAYERS: LayerState = {
   incidents: true,
   epicenters: true,
   arcs: true,
-  stations: true,
+  stations: false,
   alerts: true,
   quakes: true,
 };
