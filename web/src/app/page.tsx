@@ -262,10 +262,10 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
   const scopedDevices = regionId ? viewData.devices.filter((d) => d.regionId === regionId) : viewData.devices;
   const scopedIncidents = regionId ? viewData.incidents.filter((i) => i.regionId === regionId) : viewData.incidents;
-  const scopedMesh = regionId ? snap.mesh.filter((d) => d.regionId === regionId) : snap.mesh;
+  const scopedMesh = regionId ? viewData.mesh.filter((d) => d.regionId === regionId) : viewData.mesh;
   const selected =
     viewData.devices.find((d) => d.deviceId === selectedId) ??
-    snap.mesh.find((d) => d.deviceId === selectedId) ??
+    viewData.mesh.find((d) => d.deviceId === selectedId) ??
     null;
   // Fingerprint target: the selected node, else the riskiest online node.
   const fingerprintDevice =
@@ -279,7 +279,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     );
   const drawerDevice = drawerId
     ? (viewData.devices.find((d) => d.deviceId === drawerId) ??
-      snap.mesh.find((d) => d.deviceId === drawerId) ??
+      viewData.mesh.find((d) => d.deviceId === drawerId) ??
       null)
     : null;
   const regionName = regionId
@@ -435,7 +435,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
               <MapView
                 theme={theme}
                 devices={viewData.devices}
-                mesh={frozen ? [] : snap.mesh}
+                mesh={viewData.mesh}
                 feeds={feeds}
                 incidents={viewData.incidents}
                 regions={snap.regions}
@@ -471,7 +471,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
             <DeviceTable
               accent="#10b981"
               devices={scopedDevices}
-              mesh={frozen ? [] : scopedMesh}
+              mesh={scopedMesh}
               showRegion={!regionId}
               selectedId={selectedId}
               onSelect={selectDevice}

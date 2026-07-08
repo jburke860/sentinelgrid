@@ -74,6 +74,24 @@ interface ActiveScenario extends ScenarioState {
   radius: number;
 }
 
+/**
+ * Minimal record of a scenario's full life — enough to back-cast its forcing
+ * at any tick. Completed scenarios are logged so mesh playback and history
+ * regeneration reproduce storms that have already dissipated.
+ */
+interface ScenarioRecord {
+  kind: HazardKind;
+  regionId: string;
+  from: [number, number];
+  to: [number, number];
+  radius: number;
+  duration: number;
+  startTick: number;
+}
+
+// Keep the log for the playback window (~24h) plus slack.
+const SCENARIO_LOG_TICKS = 3000;
+
 /** Scenario lifecycle envelope: ramp → plateau → decay. */
 function envelopeAt(p: number): number {
   if (p < 0 || p >= 1) return 0;
@@ -111,6 +129,7 @@ export class SimEngine implements DataEngine {
   private incidents: Incident[] = [];
   private events: LogEvent[] = [];
   private scenarios: ActiveScenario[] = [];
+  private scenarioLog: ScenarioRecord[] = [];
   private mesh: DeviceView[] = [];
   /** Off during most of backfill — mesh has no history, only the last state matters. */
   private meshActive = false;
@@ -182,6 +201,7 @@ export class SimEngine implements DataEngine {
     this.incidents = [];
     this.events = [];
     this.scenarios = [];
+    this.scenarioLog = [];
     this.storyline = null;
     this.tickCount = 0;
     this.incidentSeq = 0;
@@ -238,27 +258,42 @@ export class SimEngine implements DataEngine {
 
   /**
    * Mesh history is never stored — it's regenerated on demand. Readings are a
-   * pure function of (node, cohort round, scenario state), so replaying the
-   * last ~6h of rounds reproduces exactly what the node would have reported.
-   * Scenarios that already dissipated aren't reconstructed.
+   * pure function of (node, cohort round, scenario records), and completed
+   * scenarios are logged, so replaying past rounds reproduces exactly what
+   * the node reported — including storms that have since dissipated.
    */
   private meshSeries(deviceId: string): Reading[] {
     const idx = Number(deviceId.slice(5));
     const node = MESH_NODES[idx];
     const current = this.mesh[idx]?.latest;
     if (!node || !current) return [];
+    const byRegion = this.scenarioRecordsByRegion();
     const lastRound = current.sequence;
     const out: Reading[] = [];
     for (let k = MESH_SERIES_POINTS; k >= 0; k--) {
       const round = lastRound - k;
       if (round < 0) continue;
-      out.push(this.buildMeshReading(node, round));
+      out.push(this.buildMeshReading(node, round, byRegion));
     }
     return out;
   }
 
   /** Historical view for the playback scrubber: state as of sim time t. */
-  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events"> {
+  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "mesh" | "incidents" | "events"> {
+    // Mesh readings are pure functions of (node, round, scenario records),
+    // so the whole tier is reconstructed for time t rather than stored.
+    const tickAt = this.tickCount - Math.round((this.simTime - t) / TICK_SIM_MS);
+    const byRegion = this.scenarioRecordsByRegion();
+    const mesh: DeviceView[] = this.mesh.map((view, i) => {
+      const node = MESH_NODES[i];
+      // Newest tick ≤ tickAt on this node's cohort stride.
+      const phase = node.meshIndex % MESH_COHORTS;
+      const tick = tickAt - ((((tickAt - phase) % MESH_COHORTS) + MESH_COHORTS) % MESH_COHORTS);
+      const round = (tick - phase) / MESH_COHORTS;
+      if (round < 0 || !view.latest) return { ...view, status: "offline" as const, latest: null, lastSeenAt: null };
+      const reading = this.buildMeshReading(node, Math.min(round, view.latest.sequence), byRegion);
+      return { ...view, lastSeenAt: reading.t, latest: reading };
+    });
     const devices: DeviceView[] = [...this.devices.values()].map((d) => {
       // Binary-search the fine ring first, fall back to the coarse ring.
       const fineStart = d.history.firstT();
@@ -289,7 +324,7 @@ export class SimEngine implements DataEngine {
         timeline: i.timeline.filter((e) => e.t <= t),
       }))
       .reverse();
-    return { devices, incidents, events: this.events.filter((e) => e.t <= t).slice(-80).reverse() };
+    return { devices, mesh, incidents, events: this.events.filter((e) => e.t <= t).slice(-80).reverse() };
   }
 
   // ---- controls ------------------------------------------------------------
@@ -481,28 +516,60 @@ export class SimEngine implements DataEngine {
    * A mesh node's reading for a given cohort round — deterministic, stateless.
    * Round r corresponds to tick r*MESH_COHORTS + (index % MESH_COHORTS).
    */
-  private buildMeshReading(node: MeshNodeSpec, round: number): Reading {
+  /**
+   * Every scenario whose forcing can still matter to mesh reconstruction —
+   * active ones plus the completed-scenario log — grouped by region. Built
+   * once per sweep and passed into buildMeshReading.
+   */
+  private scenarioRecordsByRegion(): Map<string, ScenarioRecord[]> {
+    const map = new Map<string, ScenarioRecord[]>();
+    const add = (r: ScenarioRecord) => {
+      const list = map.get(r.regionId);
+      if (list) list.push(r);
+      else map.set(r.regionId, [r]);
+    };
+    for (const s of this.scenarios) {
+      if (s.kind === "dropout" || !s.regionId || !s.epicenter) continue;
+      add({
+        kind: s.kind as HazardKind,
+        regionId: s.regionId,
+        from: s.from,
+        to: s.to,
+        radius: s.radius,
+        duration: s.duration,
+        startTick: this.tickCount - s.ticks,
+      });
+    }
+    for (const r of this.scenarioLog) add(r);
+    return map;
+  }
+
+  private buildMeshReading(
+    node: MeshNodeSpec,
+    round: number,
+    byRegion: Map<string, ScenarioRecord[]>,
+  ): Reading {
     const region = REGION_BY_ID.get(node.regionId)!;
     const tick = round * MESH_COHORTS + (node.meshIndex % MESH_COHORTS);
-    const dtTicks = tick - this.tickCount;
-    const t = this.simTime + dtTicks * TICK_SIM_MS;
+    const t = this.simTime + (tick - this.tickCount) * TICK_SIM_MS;
     const expected = this.expectedValues(region, t);
 
-    // Scenario forcing back-cast: active scenarios' envelopes and (for moving
-    // systems) epicenter tracks are fully known, so past intensity is exact.
+    // Scenario forcing back-cast: envelopes and (for moving systems)
+    // epicenter tracks are fully known for active AND completed scenarios,
+    // so intensity at any past tick is exact.
     const delta = {} as Record<Metric, number>;
     for (const m of METRICS) delta[m] = 0;
-    for (const s of this.scenarios) {
-      if (s.kind === "dropout" || s.regionId !== node.regionId || !s.epicenter) continue;
-      const p = (s.ticks + dtTicks) / s.duration;
+    for (const s of byRegion.get(node.regionId) ?? []) {
+      const p = (tick - s.startTick) / s.duration;
       if (p < 0 || p >= 1) continue;
-      const epi: [number, number] = s.moving
-        ? [s.from[0] + (s.to[0] - s.from[0]) * p, s.from[1] + (s.to[1] - s.from[1]) * p]
-        : s.from;
+      const epi: [number, number] = [
+        s.from[0] + (s.to[0] - s.from[0]) * p,
+        s.from[1] + (s.to[1] - s.from[1]) * p,
+      ];
       const dist = Math.hypot(node.lat - epi[0], node.lon - epi[1]);
       const intensity = envelopeAt(p) * Math.exp(-((dist / s.radius) ** 2));
       if (intensity < 0.02) continue;
-      const deltas = HAZARDS[s.kind as HazardKind].deltas;
+      const deltas = HAZARDS[s.kind].deltas;
       for (const m of METRICS) delta[m] += (deltas[m] ?? 0) * intensity * kindFactor(node.kind, m);
     }
 
@@ -543,8 +610,9 @@ export class SimEngine implements DataEngine {
   private stepMeshCohort() {
     const cohort = this.tickCount % MESH_COHORTS;
     const round = (this.tickCount - cohort) / MESH_COHORTS;
+    const byRegion = this.scenarioRecordsByRegion();
     for (let i = cohort; i < MESH_NODES.length; i += MESH_COHORTS) {
-      const reading = this.buildMeshReading(MESH_NODES[i], round);
+      const reading = this.buildMeshReading(MESH_NODES[i], round, byRegion);
       this.mesh[i] = { ...this.mesh[i], lastSeenAt: reading.t, latest: reading };
     }
   }
@@ -722,7 +790,24 @@ export class SimEngine implements DataEngine {
       s.ticks++;
       if (s.ticks >= s.duration) {
         this.scenarios.splice(this.scenarios.indexOf(s), 1);
-        if (s.kind !== "dropout") this.pushEvent("scenario", `${s.label} scenario dissipated`);
+        if (s.kind !== "dropout") {
+          this.pushEvent("scenario", `${s.label} scenario dissipated`);
+          // Log the completed scenario so mesh playback can back-cast it.
+          if (s.regionId && s.epicenter !== null) {
+            this.scenarioLog.push({
+              kind: s.kind as HazardKind,
+              regionId: s.regionId,
+              from: s.from,
+              to: s.to,
+              radius: s.radius,
+              duration: s.duration,
+              startTick: this.tickCount - s.ticks,
+            });
+            this.scenarioLog = this.scenarioLog.filter(
+              (r) => r.startTick + r.duration > this.tickCount - SCENARIO_LOG_TICKS,
+            );
+          }
+        }
         if (this.scenarios.length === 0) this.nextAutopilotIn = this.rng.int(35, 60);
       } else if (s.moving && s.epicenter) {
         const p = s.ticks / s.duration;

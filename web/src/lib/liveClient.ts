@@ -94,7 +94,7 @@ export class LiveEngine implements DataEngine {
     return (this.history.get(deviceId) ?? []).slice(-n).map((r) => r.riskScore);
   }
 
-  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events"> {
+  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "mesh" | "incidents" | "events"> {
     const devices = this.snapshot.devices.map((d) => {
       const series = this.history.get(d.deviceId) ?? [];
       let latest: Reading | null = null;
@@ -108,6 +108,7 @@ export class LiveEngine implements DataEngine {
     });
     return {
       devices,
+      mesh: this.snapshot.mesh,
       incidents: this.snapshot.incidents.filter((i) => i.openedAt <= t),
       events: this.events.filter((e) => e.t <= t).slice(-80).reverse(),
     };

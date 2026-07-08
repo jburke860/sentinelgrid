@@ -195,7 +195,7 @@ export interface DataEngine {
   getSeries(deviceId: string): Reading[];
   /** Risk scores only — cheap path for sparklines. */
   getRiskSeries(deviceId: string, n: number): number[];
-  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events">;
+  snapshotAt(t: number): Pick<SimSnapshot, "devices" | "mesh" | "incidents" | "events">;
   setRunning(running: boolean): void;
   setSpeed(speed: number): void;
   setAutopilot(on: boolean): void;

@@ -233,6 +233,28 @@ describe("SimEngine", () => {
     expect(e.getSeries(node.deviceId)).toEqual(series);
   });
 
+  it("replays mesh state at a past time exactly, including dissipated storms", () => {
+    const e = new SimEngine(42);
+    quiesce(e);
+    e.trigger("hurricane", "gulf");
+    stepN(e, 30); // mid-storm
+    const snap = e.getSnapshot();
+    const node = snap.mesh.find((m) => m.regionId === "gulf" && m.latest && m.latest.riskScore >= 25);
+    expect(node).toBeDefined(); // the hurricane must be forcing some gulf mesh node
+    const recorded = JSON.parse(JSON.stringify(node!.latest)) as NonNullable<typeof node>["latest"];
+
+    stepN(e, 300); // storm long dissipated
+    expect(e.getSnapshot().scenarios).toHaveLength(0);
+
+    const past = e.snapshotAt(recorded!.t);
+    const replayed = past.mesh.find((m) => m.deviceId === node!.deviceId)!.latest!;
+    // Bit-for-bit replay from the scenario log — no stored history involved.
+    expect(replayed.t).toBe(recorded!.t);
+    expect(replayed.values).toEqual(recorded!.values);
+    expect(replayed.riskScore).toBe(recorded!.riskScore);
+    expect(replayed.topHazard).toBe(recorded!.topHazard);
+  });
+
   it("reconstructs past state for the playback scrubber", () => {
     const e = new SimEngine(42);
     stepN(e, 100);
