@@ -43,7 +43,7 @@ export function TopBar({
     // Rendered inside the page-level <header> together with the KPI strip.
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge bg-panel px-3 py-2 sm:px-4">
       <div className="flex items-center gap-2.5">
-        <Image src={logo} alt="SentinelGrid" width={26} height={26} priority className="rounded-md shadow-sm" />
+        <Image src={logo} alt="SentinelGrid" width={30} height={30} priority className="rounded-md shadow-sm" />
         <h1 className="font-mono text-base font-bold tracking-[0.2em] text-brand">
           SENTINEL<span className="text-accent">GRID</span>
         </h1>
