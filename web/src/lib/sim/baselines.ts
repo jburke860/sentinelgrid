@@ -13,12 +13,15 @@ export const BASELINE_STD: Record<Metric, number> = {
 };
 
 export function dayOfYear(d: Date): number {
-  return Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000);
+  return Math.floor((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86_400_000);
 }
 
 /**
  * Expected baseline per metric for a region at time t (the "no anomaly"
  * state): diurnal temperature curve plus per-region seasonal climatology.
+ * The diurnal phase runs on region-local time (UTC + utcOffset) — the Gulf
+ * peaks in Gulf afternoon regardless of the viewer's timezone — which also
+ * makes baselines viewer-independent and deterministic.
  * When real observations are supplied they anchor the baseline instead.
  */
 export function expectedValues(
@@ -26,8 +29,8 @@ export function expectedValues(
   t: number,
   anchor?: Partial<Record<Metric, number>>,
 ): Record<Metric, number> {
-  const date = new Date(t);
-  const hour = date.getHours() + date.getMinutes() / 60;
+  const date = new Date(t + region.utcOffset * 3_600_000);
+  const hour = date.getUTCHours() + date.getUTCMinutes() / 60;
   const diurnal = 9 * Math.sin(((hour - 9) / 24) * 2 * Math.PI);
   // Seasonal swing relative to midsummer (day 197): zero in July, down to
   // -seasonalAmp in midwinter. Real observations already embody the season.

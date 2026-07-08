@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BASELINE_STD, expectedValues } from "@/lib/sim/baselines";
 import { REGION_BY_ID } from "@/lib/sim/fleet";
-import { HAZARDS } from "@/lib/sim/hazards";
+import { HAZARDS, kindFactor } from "@/lib/sim/hazards";
 import type { DeviceView, HazardKind, Metric, SimSnapshot } from "@/lib/sim/types";
 import { METRICS, METRIC_UNITS } from "@/lib/sim/types";
 import { EmptyState, Panel } from "./ui";
@@ -68,7 +68,7 @@ export function ForecastPanel({
         const p = (s.ticks + dtMs / TICK_SIM_MS) / s.duration;
         const dist = Math.hypot(device.lat - s.epicenter![0], device.lon - s.epicenter![1]);
         const intensity = envelope(p) * Math.exp(-((dist / hazard.radius) ** 2));
-        sum += (hazard.deltas[m] ?? 0) * intensity;
+        sum += (hazard.deltas[m] ?? 0) * intensity * kindFactor(device.kind, m);
       }
       return sum;
     };

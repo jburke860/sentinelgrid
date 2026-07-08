@@ -1,4 +1,23 @@
-import type { Contribution, HazardKind, Metric } from "./types";
+import type { Contribution, DeviceKind, HazardKind, Metric } from "./types";
+
+/**
+ * Node-kind sensitivity to scenario forcing: siting matters. Coastal nodes
+ * feel surge harder, ridge nodes feel wind, washes concentrate flood water,
+ * forest nodes sit in the smoke. Applied to scenario deltas only — baseline
+ * climate is siting-independent.
+ */
+export const KIND_SENSITIVITY: Record<DeviceKind, Partial<Record<Metric, number>>> = {
+  // Coastal water stays moderate: surge shows up, but a hurricane over a
+  // coastal node must still classify as hurricane (wind+water), not flood.
+  coastal: { water_level_m: 1.25, wind_speed_mps: 1.2 },
+  ridge: { wind_speed_mps: 1.4, temperature_c: 1.1 },
+  wash: { water_level_m: 1.6 },
+  forest: { smoke_ppm: 1.4, pm25_ugm3: 1.3 },
+};
+
+export function kindFactor(kind: DeviceKind, metric: Metric): number {
+  return KIND_SENSITIVITY[kind][metric] ?? 1;
+}
 
 interface HazardTerm {
   metric: Metric;
@@ -50,9 +69,12 @@ export function hazardMatches(
         if (quarantined.has(term.metric)) continue;
         s += term.weight * Math.max(0, term.dir * (z[term.metric] ?? 0));
       }
-      return { kind, label: HAZARDS[kind].label, match: Math.min(99, Math.round(s * 16)) };
+      return { kind, label: HAZARDS[kind].label, match: Math.min(99, Math.round(s * 16)), s };
     })
-    .sort((a, b) => b.match - a.match);
+    // Rank by the raw score — the display cap would otherwise tie saturated
+    // signatures and break ordering arbitrarily.
+    .sort((a, b) => b.s - a.s)
+    .map(({ kind, label, match }) => ({ kind, label, match }));
 }
 
 export const HAZARDS: Record<HazardKind, HazardProfile> = {
@@ -74,9 +96,11 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
   },
   flood: {
     label: "Flash flood",
+    // Water-dominant with little wind — that's what separates a flash flood
+    // signature from a hurricane's wind+water signature.
     terms: [
-      { metric: "water_level_m", dir: 1, weight: 0.75 },
-      { metric: "wind_speed_mps", dir: 1, weight: 0.25 },
+      { metric: "water_level_m", dir: 1, weight: 0.8 },
+      { metric: "wind_speed_mps", dir: 1, weight: 0.2 },
     ],
     deltas: { water_level_m: 1.6, wind_speed_mps: 5, humidity_pct: 25 },
     durationTicks: [45, 60],
@@ -93,7 +117,7 @@ export const HAZARDS: Record<HazardKind, HazardProfile> = {
       { metric: "water_level_m", dir: 1, weight: 0.35 },
       { metric: "humidity_pct", dir: 1, weight: 0.15 },
     ],
-    deltas: { wind_speed_mps: 16, water_level_m: 1.8, humidity_pct: 30, temperature_c: -3 },
+    deltas: { wind_speed_mps: 20, water_level_m: 1.5, humidity_pct: 30, temperature_c: -3 },
     durationTicks: [55, 75],
     radius: 0.9,
     moving: true,

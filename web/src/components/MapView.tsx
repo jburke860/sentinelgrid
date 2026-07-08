@@ -5,7 +5,7 @@ import L from "leaflet";
 import "leaflet.heat";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Layers, Maximize, Minimize } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleMarker, GeoJSON, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { GeoJSON, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import type { FeedState, Station } from "@/lib/liveFeeds";
 import { HAZARD_HUES } from "./icons";
 import type { DeviceView, Incident, RegionView, ScenarioState } from "@/lib/sim/types";
@@ -241,19 +241,42 @@ function HeatLayer({
  */
 const MESH_CAP = 700;
 
-function MeshDots({ nodes, onSelect }: { nodes: DeviceView[]; onSelect: (id: string) => void }) {
+/**
+ * All canvas dot layers (mesh, stations, quakes) share ONE renderer in a
+ * dedicated pane above the alert polygons: stacked canvases each swallow the
+ * pointer events of everything below them, so hover/click only works
+ * reliably when a single canvas does the hit-testing for every dot. The
+ * generous tolerance gives small dots a fat, clickable halo.
+ */
+function ensureDotsRenderer(map: L.Map, ref: React.RefObject<L.Canvas | null>): L.Canvas {
+  if (!map.getPane("sg-dots")) {
+    const pane = map.createPane("sg-dots");
+    pane.style.zIndex = "450"; // above overlayPane (400), below markerPane (600)
+  }
+  if (!ref.current) ref.current = L.canvas({ padding: 0.2, tolerance: 8, pane: "sg-dots" });
+  return ref.current;
+}
+
+function MeshDots({
+  nodes,
+  onSelect,
+  rendererRef,
+}: {
+  nodes: DeviceView[];
+  onSelect: (id: string) => void;
+  rendererRef: React.RefObject<L.Canvas | null>;
+}) {
   const map = useMap();
   const poolRef = useRef(new Map<string, L.CircleMarker>());
-  const rendererRef = useRef<L.Canvas | null>(null);
-  if (!rendererRef.current) rendererRef.current = L.canvas({ padding: 0.2 });
   const latest = useRef({ nodes, onSelect });
   latest.current = { nodes, onSelect };
 
   const redraw = () => {
+    const renderer = ensureDotsRenderer(map, rendererRef);
     const { nodes: all } = latest.current;
     const bounds = map.getBounds().pad(0.1);
     const zoom = map.getZoom();
-    const radius = zoom >= DETAIL_ZOOM ? 3.5 : 2.5;
+    const radius = zoom >= DETAIL_ZOOM ? 4.5 : 3;
     const inView: DeviceView[] = [];
     for (const d of all) {
       if (d.latest && bounds.contains([d.latest.lat, d.latest.lon])) inView.push(d);
@@ -271,11 +294,13 @@ function MeshDots({ nodes, onSelect }: { nodes: DeviceView[]; onSelect: (id: str
       let marker = pool.get(d.deviceId);
       if (!marker) {
         marker = L.circleMarker([d.latest!.lat, d.latest!.lon], {
-          renderer: rendererRef.current!,
+          renderer,
+          pane: "sg-dots",
           radius,
           stroke: false,
           fillColor: color,
           fillOpacity: 0.8,
+          bubblingMouseEvents: false,
         });
         marker.on("click", () => latest.current.onSelect(d.deviceId));
         marker.bindTooltip(() => {
@@ -328,18 +353,52 @@ function stationTooltip(s: Station): string {
   return `<b>${s.name}, ${s.st}</b> · LIVE ${s.kind === "wx" ? "NWS/ASOS" : "USGS gauge"}<br>${parts.join(" · ")}<br>observed ${age}m ago${s.risk !== null ? ` · anomaly ${s.risk}` : ""}`;
 }
 
-function StationDots({ stations }: { stations: Station[] }) {
+const METRIC_NAMES: Record<string, string> = {
+  temperature_c: "Temperature",
+  humidity_pct: "Humidity",
+  wind_speed_mps: "Wind speed",
+  water_level_m: "Water level",
+};
+
+function stationPopup(s: Station): string {
+  const rows = Object.entries(s.obs)
+    .map(
+      ([m, v]) =>
+        `<tr><td style="opacity:.65;padding-right:10px">${METRIC_NAMES[m] ?? m}</td><td style="text-align:right"><b>${v} ${METRIC_UNITS[m as keyof typeof METRIC_UNITS]}</b></td></tr>`,
+    )
+    .join("");
+  const age = Math.round((Date.now() - s.t) / 60_000);
+  return `
+    <div style="font-size:12px;min-width:180px">
+      <div style="font-weight:600">${s.name}, ${s.st}</div>
+      <div style="opacity:.65;font-size:10px;margin-bottom:6px">
+        REAL OBSERVATION · ${s.kind === "wx" ? "NWS/ASOS weather station" : "USGS stream gauge"} · ${age}m ago
+      </div>
+      <table style="width:100%">${rows}</table>
+      <div style="opacity:.65;font-size:10px;margin-top:6px">
+        ${s.risk !== null ? `anomaly vs regional baseline: <b>${s.risk}</b>` : "unscored (no shared baseline for absolute stage)"}
+        · ${s.lat.toFixed(2)}°, ${s.lon.toFixed(2)}°
+      </div>
+    </div>`;
+}
+
+function StationDots({
+  stations,
+  rendererRef,
+}: {
+  stations: Station[];
+  rendererRef: React.RefObject<L.Canvas | null>;
+}) {
   const map = useMap();
   const poolRef = useRef(new Map<string, L.CircleMarker>());
-  const rendererRef = useRef<L.Canvas | null>(null);
-  if (!rendererRef.current) rendererRef.current = L.canvas({ padding: 0.2 });
   const latest = useRef(stations);
   latest.current = stations;
 
   const redraw = () => {
+    const renderer = ensureDotsRenderer(map, rendererRef);
     const bounds = map.getBounds().pad(0.1);
     const zoom = map.getZoom();
-    const radius = zoom >= DETAIL_ZOOM ? 4.5 : 3;
+    const radius = zoom >= DETAIL_ZOOM ? 5 : 3.5;
     const inView = latest.current.filter((s) => bounds.contains([s.lat, s.lon]));
     if (inView.length > STATION_CAP) {
       inView.sort((a, b) => (b.risk ?? -1) - (a.risk ?? -1));
@@ -353,14 +412,19 @@ function StationDots({ stations }: { stations: Station[] }) {
       let marker = pool.get(s.id);
       if (!marker) {
         marker = L.circleMarker([s.lat, s.lon], {
-          renderer: rendererRef.current!,
+          renderer,
+          pane: "sg-dots",
           radius,
           weight: 1.5,
           color,
           fill: true,
           fillOpacity: 0.08,
+          bubblingMouseEvents: false,
         });
         marker.bindTooltip(() => stationTooltip(latest.current.find((x) => x.id === s.id) ?? s));
+        marker.bindPopup(() => stationPopup(latest.current.find((x) => x.id === s.id) ?? s), {
+          maxWidth: 260,
+        });
         marker.addTo(map);
         pool.set(s.id, marker);
       } else {
@@ -388,6 +452,81 @@ function StationDots({ stations }: { stations: Station[] }) {
      
     [],
   );
+  return null;
+}
+
+/** Live earthquakes on the shared dots canvas (magnitude-scaled rings). */
+function QuakeDots({
+  quakes,
+  rendererRef,
+}: {
+  quakes: FeedState["quakes"];
+  rendererRef: React.RefObject<L.Canvas | null>;
+}) {
+  const map = useMap();
+  const markersRef = useRef<L.CircleMarker[]>([]);
+  useEffect(() => {
+    const renderer = ensureDotsRenderer(map, rendererRef);
+    for (const m of markersRef.current) m.remove();
+    markersRef.current = quakes.map((q) => {
+      const m = L.circleMarker([q.lat, q.lon], {
+        renderer,
+        pane: "sg-dots",
+        radius: 3 + q.mag * 1.8,
+        weight: 2,
+        color: "#c2703e",
+        fillColor: "#c2703e",
+        fillOpacity: 0.25,
+        bubblingMouseEvents: false,
+      });
+      m.bindTooltip(`M${q.mag.toFixed(1)} · ${q.place} · LIVE USGS`);
+      m.addTo(map);
+      return m;
+    });
+    return () => {
+      for (const m of markersRef.current) m.remove();
+      markersRef.current = [];
+    };
+  }, [map, quakes, rendererRef]);
+  return null;
+}
+
+/**
+ * Alert polygons render non-interactive (so they never sit between the
+ * pointer and the dot layers); clicks are resolved here instead with a
+ * point-in-polygon test on the map click that the dots didn't consume.
+ */
+function pointInRing(lat: number, lon: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = [ring[i][0], ring[i][1]];
+    const [xj, yj] = [ring[j][0], ring[j][1]];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function alertContains(geometry: GeoJSON.Geometry, lat: number, lon: number): boolean {
+  if (geometry.type === "Polygon") return pointInRing(lat, lon, geometry.coordinates[0]);
+  if (geometry.type === "MultiPolygon")
+    return geometry.coordinates.some((poly) => pointInRing(lat, lon, poly[0]));
+  return false;
+}
+
+function AlertClickProbe({ alerts, enabled }: { alerts: FeedState["alerts"]; enabled: boolean }) {
+  const latest = useRef({ alerts, enabled });
+  latest.current = { alerts, enabled };
+  const map = useMapEvents({
+    click: (e) => {
+      if (!latest.current.enabled) return;
+      const hit = latest.current.alerts.find((a) => alertContains(a.geometry, e.latlng.lat, e.latlng.lng));
+      if (!hit) return;
+      L.popup({ maxWidth: 280 })
+        .setLatLng(e.latlng)
+        .setContent(`<b>${hit.event}</b> · LIVE NWS<br><span style="font-size:11px">${hit.headline ?? ""}</span>`)
+        .openOn(map);
+    },
+  });
   return null;
 }
 
@@ -535,6 +674,8 @@ export default function MapView({
   // Set before selection changes that originate from map gestures; FlyTo
   // consumes it to skip the counter-animation.
   const suppressFly = useRef(false);
+  // One canvas renderer shared by every dot layer — see ensureDotsRenderer.
+  const dotsRenderer = useRef<L.Canvas | null>(null);
 
   const [layers, setLayers] = useState<LayerState>(loadLayers);
   const [basemap, setBasemap] = useState<Basemap>(
@@ -711,38 +852,23 @@ export default function MapView({
                 })),
               } as GeoJSON.FeatureCollection
             }
+            // Non-interactive: clicks resolve via AlertClickProbe so the
+            // polygons never block hover/click on the dot layers above.
+            interactive={false}
             style={(f) => ({
               color: f?.properties.color ?? "#94a3b8",
               weight: 1.5,
               fillColor: f?.properties.color ?? "#94a3b8",
               fillOpacity: 0.14,
             })}
-            onEachFeature={(f, layer) => {
-              layer.bindPopup(
-                `<b>${f.properties.event}</b> · LIVE NWS<br>${f.properties.headline ?? ""}`,
-              );
-            }}
           />
         )}
-        {layers.quakes &&
-          feeds.quakes.map((q) => (
-            <CircleMarker
-              key={q.id}
-              center={[q.lat, q.lon]}
-              radius={3 + q.mag * 1.8}
-              pathOptions={{ color: "#c2703e", weight: 2, fillColor: "#c2703e", fillOpacity: 0.25 }}
-            >
-              <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
-                <span className="font-mono text-xs">
-                  M{q.mag.toFixed(1)} · {q.place} · LIVE USGS
-                </span>
-              </Tooltip>
-            </CircleMarker>
-          ))}
-        {layers.stations && <StationDots stations={feeds.stations} />}
+        <AlertClickProbe alerts={feeds.alerts} enabled={layers.alerts} />
+        {layers.quakes && <QuakeDots quakes={feeds.quakes} rendererRef={dotsRenderer} />}
+        {layers.stations && <StationDots stations={feeds.stations} rendererRef={dotsRenderer} />}
 
         {/* Mesh tier: culled canvas dots under the flagship badges. */}
-        <MeshDots nodes={mesh} onSelect={onSelect} />
+        <MeshDots nodes={mesh} onSelect={onSelect} rendererRef={dotsRenderer} />
         {selectedMesh?.latest && (
           <Marker
             position={[selectedMesh.latest.lat, selectedMesh.latest.lon]}

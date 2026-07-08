@@ -170,6 +170,12 @@ input[type="range"].scrubber::-moz-range-thumb {
 
 /* ---- leaflet ---- */
 
+/* The heat overlay is purely visual; without this its canvas swallows every
+   hover/click aimed at markers underneath it. */
+.leaflet-heatmap-layer {
+  pointer-events: none !important;
+}
+
 .leaflet-container {
   height: 100%;
   width: 100%;

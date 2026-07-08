@@ -90,6 +90,10 @@ export class LiveEngine implements DataEngine {
     return this.history.get(deviceId) ?? [];
   }
 
+  getRiskSeries(deviceId: string, n: number): number[] {
+    return (this.history.get(deviceId) ?? []).slice(-n).map((r) => r.riskScore);
+  }
+
   snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events"> {
     const devices = this.snapshot.devices.map((d) => {
       const series = this.history.get(d.deviceId) ?? [];

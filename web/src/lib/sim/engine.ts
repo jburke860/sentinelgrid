@@ -1,6 +1,7 @@
 import { BASELINE_STD, expectedValues } from "./baselines";
 import { FLEET, REGION_BY_ID, REGIONS } from "./fleet";
-import { HAZARDS } from "./hazards";
+import { HAZARDS, kindFactor } from "./hazards";
+import { ReadingRing, packFlags, packQuarantine, unpackFlags, type PackedReading } from "./histring";
 import { MESH_NODES, meshNormal, meshStatic, type MeshNodeSpec } from "./mesh";
 import { Rng } from "./rng";
 import { STORYLINE_BY_ID } from "./storylines";
@@ -96,8 +97,10 @@ interface DeviceState {
   dqStreak: Record<Metric, number>;
   highRiskStreak: number;
   normalStreak: number;
-  history: Reading[];
-  coarse: Reading[];
+  /** Current reading kept as a full object; history lives in typed-array rings. */
+  latest: Reading | null;
+  history: ReadingRing;
+  coarse: ReadingRing;
 }
 
 export type { IncidentAction };
@@ -205,9 +208,29 @@ export class SimEngine implements DataEngine {
     if (deviceId.startsWith("mesh-")) return this.meshSeries(deviceId);
     const d = this.devices.get(deviceId);
     if (!d) return [];
-    const fineStart = d.history[0]?.t ?? Infinity;
-    const older = d.coarse.filter((r) => r.t < fineStart);
-    return older.length ? [...older, ...d.history] : d.history;
+    const fineStart = d.history.firstT();
+    const out: Reading[] = [];
+    for (let i = 0; i < d.coarse.length; i++) {
+      if (d.coarse.tAt(i) >= fineStart) break;
+      out.push(this.unpack(d, d.coarse.read(i)));
+    }
+    for (let i = 0; i < d.history.length; i++) out.push(this.unpack(d, d.history.read(i)));
+    return out;
+  }
+
+  /** Fast path for sparklines: risk scores only, no Reading reconstruction. */
+  getRiskSeries(deviceId: string, n: number): number[] {
+    if (deviceId.startsWith("mesh-")) {
+      return this.meshSeries(deviceId)
+        .slice(-n)
+        .map((r) => r.riskScore);
+    }
+    const d = this.devices.get(deviceId);
+    if (!d) return [];
+    const out: number[] = [];
+    const start = Math.max(0, d.history.length - n);
+    for (let i = start; i < d.history.length; i++) out.push(d.history.riskAt(i));
+    return out;
   }
 
   /**
@@ -234,17 +257,18 @@ export class SimEngine implements DataEngine {
   /** Historical view for the playback scrubber: state as of sim time t. */
   snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events"> {
     const devices: DeviceView[] = [...this.devices.values()].map((d) => {
-      const series = this.getSeries(d.spec.deviceId);
+      // Binary-search the fine ring first, fall back to the coarse ring.
+      const fineStart = d.history.firstT();
       let latest: Reading | null = null;
-      for (let i = series.length - 1; i >= 0; i--) {
-        if (series[i].t <= t) {
-          latest = series[i];
-          break;
-        }
+      if (t >= fineStart) {
+        const i = d.history.latestAtOrBefore(t);
+        if (i >= 0) latest = this.unpack(d, d.history.read(i));
+      } else {
+        const i = d.coarse.latestAtOrBefore(t);
+        if (i >= 0) latest = this.unpack(d, d.coarse.read(i));
       }
       // Older history is downsampled to 5-minute buckets, so allow a wider
       // gap before calling a node offline there.
-      const fineStart = d.history[0]?.t ?? Infinity;
       const staleAfter = t >= fineStart ? 3 * TICK_SIM_MS : 2.5 * COARSE_EVERY * TICK_SIM_MS;
       const stale = latest === null || t - latest.t > staleAfter;
       return {
@@ -372,10 +396,50 @@ export class SimEngine implements DataEngine {
         },
         highRiskStreak: 0,
         normalStreak: 0,
-        history: [],
-        coarse: [],
+        latest: null,
+        history: new ReadingRing(HISTORY_CAP),
+        coarse: new ReadingRing(COARSE_CAP),
       });
     }
+  }
+
+  /**
+   * Rebuild a full Reading from its packed form. Contributions and topHazard
+   * are recomputed from values + baselines (they're pure functions of them);
+   * quarantine and quality flags come from the packed bits.
+   */
+  private unpack(state: DeviceState, p: PackedReading): Reading {
+    const expected = this.expectedValues(state.region, p.t);
+    const zs = {} as Record<Metric, number>;
+    const quarantined = new Set<Metric>();
+    for (let i = 0; i < METRICS.length; i++) {
+      const m = METRICS[i];
+      zs[m] = (p.values[m] - expected[m]) / BASELINE_STD[m];
+      if (p.quarBits & (1 << i)) quarantined.add(m);
+    }
+    const { topHazard } = this.scoreHazards(state.region, zs, quarantined);
+    const contributions: Contribution[] = METRICS.map((m) => ({
+      metric: m,
+      value: p.values[m],
+      z: zs[m],
+      quarantined: quarantined.has(m),
+    })).sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+    return {
+      deviceId: state.spec.deviceId,
+      t: p.t,
+      lat: p.lat,
+      lon: p.lon,
+      values: p.values,
+      batteryPct: p.batteryPct,
+      rssiDbm: p.rssiDbm,
+      sequence: p.sequence,
+      flags: unpackFlags(p.flagBits),
+      riskScore: p.riskScore,
+      riskLevel:
+        p.riskScore >= 75 ? "critical" : p.riskScore >= 50 ? "warning" : p.riskScore >= 25 ? "watch" : "normal",
+      topHazard,
+      contributions,
+    };
   }
 
   private initMesh() {
@@ -436,7 +500,7 @@ export class SimEngine implements DataEngine {
       const intensity = envelopeAt(p) * Math.exp(-((dist / s.radius) ** 2));
       if (intensity < 0.02) continue;
       const deltas = HAZARDS[s.kind as HazardKind].deltas;
-      for (const m of METRICS) delta[m] += (deltas[m] ?? 0) * intensity;
+      for (const m of METRICS) delta[m] += (deltas[m] ?? 0) * intensity * kindFactor(node.kind, m);
     }
 
     const values = {} as Record<Metric, number>;
@@ -492,7 +556,7 @@ export class SimEngine implements DataEngine {
       ...d.spec,
       status: d.status,
       lastSeenAt: d.lastSeenAt,
-      latest: d.history.length ? d.history[d.history.length - 1] : null,
+      latest: d.latest,
     }));
 
     // Region peaks consider both tiers — a hazard sweeping mesh nodes should
@@ -721,8 +785,8 @@ export class SimEngine implements DataEngine {
       return;
     }
 
-    // Battery drain with daytime solar top-up; RSSI random walk.
-    const hour = new Date(this.simTime).getHours();
+    // Battery drain with daytime solar top-up (region-local sun); RSSI random walk.
+    const hour = new Date(this.simTime + region.utcOffset * 3_600_000).getUTCHours();
     const charging = hour >= 9 && hour <= 16 && state.batteryPct < 98;
     state.batteryPct = Math.min(
       100,
@@ -772,7 +836,7 @@ export class SimEngine implements DataEngine {
       const intensity = this.envelope(s) * Math.exp(-((dist / s.radius) ** 2));
       if (intensity < 0.02) continue;
       const deltas = HAZARDS[s.kind as HazardKind].deltas;
-      for (const m of METRICS) scenarioDelta[m] += (deltas[m] ?? 0) * intensity;
+      for (const m of METRICS) scenarioDelta[m] += (deltas[m] ?? 0) * intensity * kindFactor(spec.kind, m);
     }
 
     const values = {} as Record<Metric, number>;
@@ -848,25 +912,47 @@ export class SimEngine implements DataEngine {
       contributions,
     };
 
-    state.history.push(reading);
-    if (state.history.length > HISTORY_CAP) state.history.splice(0, state.history.length - HISTORY_CAP);
+    state.latest = reading;
+    const flagBits = packFlags(flags);
+    const quarBits = packQuarantine(quarantined);
+    state.history.push({
+      t: reading.t,
+      lat: reading.lat,
+      lon: reading.lon,
+      batteryPct: reading.batteryPct,
+      rssiDbm: reading.rssiDbm,
+      sequence: reading.sequence,
+      riskScore,
+      values,
+      flagBits,
+      quarBits,
+    });
 
     // Downsample into the coarse ring so the scrubber reaches back ~24h
     // without holding every 30s reading in memory.
     if (this.tickCount % COARSE_EVERY === 0) {
-      const window = state.history.slice(-COARSE_EVERY);
+      const count = Math.min(COARSE_EVERY, state.history.length);
+      const start = state.history.length - count;
       const avg = {} as Record<Metric, number>;
-      for (const m of METRICS) {
-        avg[m] = window.reduce((acc, r) => acc + r.values[m], 0) / window.length;
+      for (let mi = 0; mi < METRICS.length; mi++) {
+        let sum = 0;
+        for (let i = start; i < state.history.length; i++) sum += state.history.valueAt(i, mi);
+        avg[METRICS[mi]] = sum / count;
       }
-      const peak = Math.max(...window.map((r) => r.riskScore));
+      let peak = 0;
+      for (let i = start; i < state.history.length; i++) peak = Math.max(peak, state.history.riskAt(i));
       state.coarse.push({
-        ...reading,
-        values: avg,
+        t: reading.t,
+        lat: reading.lat,
+        lon: reading.lon,
+        batteryPct: reading.batteryPct,
+        rssiDbm: reading.rssiDbm,
+        sequence: reading.sequence,
         riskScore: peak,
-        riskLevel: peak >= 75 ? "critical" : peak >= 50 ? "warning" : peak >= 25 ? "watch" : "normal",
+        values: avg,
+        flagBits,
+        quarBits,
       });
-      if (state.coarse.length > COARSE_CAP) state.coarse.splice(0, state.coarse.length - COARSE_CAP);
     }
 
     state.lastSeenAt = this.simTime;

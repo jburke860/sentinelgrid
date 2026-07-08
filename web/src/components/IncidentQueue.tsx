@@ -25,10 +25,7 @@ import {
 
 /** Risk trend for the incident's device: sparkline values + direction. */
 function riskTrend(engine: DataEngine, deviceId: string): { values: number[]; dir: -1 | 0 | 1 } {
-  const values = engine
-    .getSeries(deviceId)
-    .slice(-40)
-    .map((r) => r.riskScore);
+  const values = engine.getRiskSeries(deviceId, 40);
   if (values.length < 10) return { values, dir: 0 };
   const recent = values.slice(-5).reduce((a, b) => a + b, 0) / 5;
   const prior = values.slice(-10, -5).reduce((a, b) => a + b, 0) / 5;

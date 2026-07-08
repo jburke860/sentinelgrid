@@ -11,6 +11,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 0,
     humidityBase: 28,
     seasonalAmp: 7,
+    utcOffset: -8,
   },
   {
     id: "norcal",
@@ -22,6 +23,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -2,
     humidityBase: 55,
     seasonalAmp: 6,
+    utcOffset: -8,
   },
   {
     id: "pnw",
@@ -33,6 +35,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -6,
     humidityBase: 55,
     seasonalAmp: 9,
+    utcOffset: -8,
   },
   {
     id: "southwest",
@@ -44,6 +47,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 12,
     humidityBase: 15,
     seasonalAmp: 11,
+    utcOffset: -7,
   },
   {
     id: "mountainwest",
@@ -55,6 +59,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -3,
     humidityBase: 25,
     seasonalAmp: 13,
+    utcOffset: -7,
   },
   {
     id: "rockies",
@@ -66,6 +71,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -4,
     humidityBase: 30,
     seasonalAmp: 12,
+    utcOffset: -7,
   },
   {
     id: "texas",
@@ -77,6 +83,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 8,
     humidityBase: 45,
     seasonalAmp: 10,
+    utcOffset: -6,
   },
   {
     id: "gulf",
@@ -88,6 +95,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 6,
     humidityBase: 65,
     seasonalAmp: 9,
+    utcOffset: -6,
   },
   {
     id: "southeast",
@@ -99,6 +107,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 8,
     humidityBase: 70,
     seasonalAmp: 7,
+    utcOffset: -5,
   },
   {
     id: "carolinas",
@@ -110,6 +119,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 4,
     humidityBase: 58,
     seasonalAmp: 9,
+    utcOffset: -5,
   },
   {
     id: "midwest",
@@ -121,6 +131,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 0,
     humidityBase: 50,
     seasonalAmp: 14,
+    utcOffset: -6,
   },
   {
     id: "plains",
@@ -132,6 +143,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: 2,
     humidityBase: 40,
     seasonalAmp: 13,
+    utcOffset: -6,
   },
   {
     id: "uppermidwest",
@@ -143,6 +155,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -8,
     humidityBase: 50,
     seasonalAmp: 17,
+    utcOffset: -6,
   },
   {
     id: "greatlakes",
@@ -154,6 +167,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -7,
     humidityBase: 55,
     seasonalAmp: 15,
+    utcOffset: -6,
   },
   {
     id: "midatlantic",
@@ -165,6 +179,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -2,
     humidityBase: 52,
     seasonalAmp: 12,
+    utcOffset: -5,
   },
   {
     id: "northeast",
@@ -176,6 +191,7 @@ export const REGIONS: RegionSpec[] = [
     tempOffset: -5,
     humidityBase: 50,
     seasonalAmp: 13,
+    utcOffset: -5,
   },
 ];
 

@@ -61,6 +61,8 @@ export interface RegionSpec {
   humidityBase: number;
   /** Annual temperature swing: how much colder midwinter runs than midsummer. */
   seasonalAmp: number;
+  /** Standard UTC offset (hours) so the diurnal cycle peaks in local afternoon. */
+  utcOffset: number;
 }
 
 export interface RegionView extends RegionSpec {
@@ -191,6 +193,8 @@ export interface DataEngine {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => SimSnapshot;
   getSeries(deviceId: string): Reading[];
+  /** Risk scores only — cheap path for sparklines. */
+  getRiskSeries(deviceId: string, n: number): number[];
   snapshotAt(t: number): Pick<SimSnapshot, "devices" | "incidents" | "events">;
   setRunning(running: boolean): void;
   setSpeed(speed: number): void;
