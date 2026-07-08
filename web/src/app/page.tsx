@@ -3,7 +3,6 @@
 import { Map as MapIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AboutModal } from "@/components/AboutModal";
 import { AnomalyPanel } from "@/components/AnomalyPanel";
 import { CommandPalette, buildCommands } from "@/components/CommandPalette";
 import { DeviceDrawer } from "@/components/DeviceDrawer";
@@ -15,8 +14,8 @@ import { IncidentQueue } from "@/components/IncidentQueue";
 import { ModelConfidence } from "@/components/ModelConfidence";
 import { KpiStrip, type KpiPoint } from "@/components/KpiStrip";
 import { PerfOverlay } from "@/components/PerfOverlay";
+import { HelpHub, type HelpTab } from "@/components/HelpHub";
 import { PrintReport } from "@/components/PrintReport";
-import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SituationSummary } from "@/components/SituationSummary";
 import { SideRail, type View } from "@/components/SideRail";
 import { TelemetryChart } from "@/components/TelemetryChart";
@@ -72,8 +71,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const [selectedId, setSelectedId] = useState<string | null>(() => readUrlState().deviceId);
   const [viewTime, setViewTime] = useState<number | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
+  const [nudge, setNudge] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [alertsOn, setAlertsOn] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -153,6 +152,98 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     localStorage.setItem("sg-theme", next);
   };
 
+  // ---- guided demo -----------------------------------------------------------
+  // A scripted ~60s tour that drives the app through the same handlers the UI
+  // uses. Narration renders as a toast; Esc or "skip" cancels.
+  const [demoText, setDemoText] = useState<string | null>(null);
+  const [demoStep, setDemoStep] = useState(0);
+  const [demoTotal, setDemoTotal] = useState(0);
+  const demoTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const stopDemo = () => {
+    for (const t of demoTimers.current) clearTimeout(t);
+    demoTimers.current = [];
+    setDemoText(null);
+  };
+  const startDemo = () => {
+    stopDemo();
+    setHelpTab(null);
+    const steps: Array<{ text: string; hold: number; run?: () => void }> = [
+      {
+        text: "This is SentinelGrid: 3,150 simulated sensors plus ~3,700 real NWS/USGS stations on one national map.",
+        hold: 7000,
+        run: () => {
+          setViewTime(null);
+          setView("overview");
+          selectRegion(null);
+        },
+      },
+      {
+        text: "Injecting a hurricane into the Gulf Coast — a moving storm that forces wind, surge, and pressure on every node in its path…",
+        hold: 9000,
+        run: () => {
+          engine.trigger("hurricane", "gulf");
+          selectRegion("gulf");
+        },
+      },
+      {
+        text: "Each node scores its readings against learned baselines. Coastal nodes feel the surge hardest — watch the coast light up. The radar and warning polygons behind it are real, live data.",
+        hold: 11000,
+      },
+      {
+        text: "Sustained anomalies open incidents. The queue triages them: acknowledge, investigate, resolve — with playbooks in the situation summary.",
+        hold: 9000,
+        run: () => setView("incidents"),
+      },
+      {
+        text: "Analytics: the anomaly fingerprint matches the hurricane's signature, and the forecast projects its decay — every number derives from the model.",
+        hold: 11000,
+        run: () => setView("analytics"),
+      },
+      {
+        text: "And every moment replays: scrubbing back reconstructs all 3,000 mesh nodes deterministically — no stored history.",
+        hold: 9000,
+        run: () => {
+          setView("overview");
+          const s = engine.getSnapshot();
+          setViewTime(Math.max(s.historyStart, s.simTime - 30 * 60_000));
+        },
+      },
+      {
+        text: "Back live. Press ⌘K to explore everything else — enjoy!",
+        hold: 6000,
+        run: () => setViewTime(null),
+      },
+    ];
+    setDemoTotal(steps.length);
+    let at = 0;
+    steps.forEach((step, i) => {
+      demoTimers.current.push(
+        setTimeout(() => {
+          setDemoStep(i);
+          setDemoText(step.text);
+          step.run?.();
+          if (i === steps.length - 1) demoTimers.current.push(setTimeout(stopDemo, step.hold));
+        }, at),
+      );
+      at += step.hold;
+    });
+  };
+
+  // First-visit nudge toward the feature guide.
+  useEffect(() => {
+    if (!localStorage.getItem("sg-visited")) setNudge(true);
+  }, []);
+  useEffect(() => {
+    if (helpTab) {
+      setNudge(false);
+      localStorage.setItem("sg-visited", "1");
+    }
+  }, [helpTab]);
+  const dismissNudge = () => {
+    setNudge(false);
+    localStorage.setItem("sg-visited", "1");
+  };
+
   // Historical view while scrubbing; live snapshot otherwise.
   const frozen = viewTime !== null;
   const viewData = useMemo(
@@ -212,8 +303,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   }, [snap.incidents, alertsOn]);
 
   // Keyboard shortcuts. Refs keep the handler stable across renders.
-  const stateRef = useRef({ snap, viewTime, drawerId, selectedId, regionId, aboutOpen, helpOpen });
-  stateRef.current = { snap, viewTime, drawerId, selectedId, regionId, aboutOpen, helpOpen };
+  const stateRef = useRef({ snap, viewTime, drawerId, selectedId, regionId, helpTab, demoActive: false });
+  stateRef.current = { snap, viewTime, drawerId, selectedId, regionId, helpTab, demoActive: demoText !== null };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // ⌘K works everywhere, even from inside inputs.
@@ -238,10 +329,10 @@ function Dashboard({ engine }: { engine: DataEngine }) {
             : Math.min(s.snap.simTime, cur + step);
         setViewTime(s.snap.simTime - next < STEP_MS ? null : next);
       } else if (e.key === "?") {
-        setHelpOpen((v) => !v);
+        setHelpTab((v) => (v ? null : "features"));
       } else if (e.key === "Escape") {
-        if (s.helpOpen) setHelpOpen(false);
-        else if (s.aboutOpen) setAboutOpen(false);
+        if (s.demoActive) stopDemo();
+        else if (s.helpTab) setHelpTab(null);
         else if (s.drawerId) setDrawerId(null);
         else if (s.viewTime !== null) setViewTime(null);
         else if (s.selectedId) setSelectedId(null);
@@ -351,6 +442,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
             toggleTheme,
             trigger: (kind, r) => engine.trigger(kind as Parameters<typeof engine.trigger>[0], r),
             playStoryline: (id) => engine.playStoryline(id),
+            openHelp: setHelpTab,
+            startDemo,
           })
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -379,7 +472,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           onToggleTheme={toggleTheme}
           alertsOn={alertsOn}
           onToggleAlerts={toggleAlerts}
-          onOpenAbout={() => setAboutOpen(true)}
+          onOpenAbout={() => setHelpTab("about")}
           onOpenPalette={() => setPaletteOpen(true)}
           onSelectRegion={selectRegion}
         />
@@ -413,7 +506,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         </main>
       ) : (
       <div className="flex min-h-0 flex-1">
-      <SideRail view={view} onChange={setView} openIncidents={openCount} onOpenAbout={() => setAboutOpen(true)} />
+      <SideRail view={view} onChange={setView} openIncidents={openCount} onOpenAbout={() => setHelpTab("about")} />
       <main id="main" className="grid min-h-0 flex-1 auto-rows-[minmax(20rem,auto)] grid-cols-1 gap-2 overflow-y-auto p-2 lg:auto-rows-fr lg:grid-cols-12 lg:grid-rows-6 lg:overflow-hidden">
         <div className={`${panelClass("map")} min-h-0`}>
           <ErrorBoundary label="Map">
@@ -599,9 +692,50 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           onClose={() => setDrawerId(null)}
         />
       )}
-      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
-      {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
+      {helpTab && (
+        <HelpHub tab={helpTab} onTab={setHelpTab} onClose={() => setHelpTab(null)} onStartDemo={startDemo} />
+      )}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+
+      {/* Guided-demo narration */}
+      {demoText && (
+        <div className="fade-up fixed bottom-20 left-1/2 z-[1300] w-[min(560px,92%)] -translate-x-1/2 rounded-xl border border-accent/40 bg-panel/95 px-4 py-3 shadow-2xl backdrop-blur-sm">
+          <p className="text-xs leading-relaxed text-ink">{demoText}</p>
+          <div className="mt-2 flex items-center gap-1.5">
+            {Array.from({ length: demoTotal }, (_, i) => (
+              <span key={i} className={`h-1 flex-1 rounded-full ${i <= demoStep ? "bg-accent" : "bg-edge"}`} />
+            ))}
+            <button
+              onClick={stopDemo}
+              className="ml-2 shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-ink-dim hover:text-ink"
+            >
+              skip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* First-visit nudge */}
+      {nudge && !demoText && (
+        <div className="fade-up fixed bottom-20 left-1/2 z-[1200] flex -translate-x-1/2 items-center gap-2 rounded-full border border-edge bg-panel/95 py-1.5 pr-2 pl-4 shadow-xl backdrop-blur-sm">
+          <span className="text-xs text-ink-dim">
+            New here? Press <span className="font-mono text-accent">?</span> for the feature guide
+          </span>
+          <button
+            onClick={() => setHelpTab("features")}
+            className="rounded-full bg-accent/15 px-2.5 py-1 font-mono text-[10px] text-accent hover:bg-accent/25"
+          >
+            open
+          </button>
+          <button
+            onClick={dismissNudge}
+            className="rounded-full px-1.5 py-1 font-mono text-[10px] text-ink-dim hover:text-ink"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {showPerf && <PerfOverlay snap={snap} />}
     </div>
     <PrintReport snap={snap} />

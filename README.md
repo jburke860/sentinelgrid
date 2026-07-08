@@ -3,6 +3,7 @@
 SentinelGrid is a local-first edge telemetry platform for climate-risk monitoring. It uses virtual sensor nodes instead of physical hardware, then builds the same kind of software surface a real system would need: MQTT ingestion, geospatial storage, anomaly scoring, data-quality checks, and a national operations console — overlaid with genuinely live public data (NEXRAD radar, ~3,700 real NWS/USGS stations, active warning polygons, earthquakes).
 
 **Live demo:** [sentinelgrid-two.vercel.app](https://sentinelgrid-two.vercel.app) · created by Jeremy Burke
+**Reviewing the code?** Start with [docs/REVIEWERS.md](docs/REVIEWERS.md) — a ten-minute tour of the architecture, the design decisions worth interrogating, and what the tests prove. In the app, press `?` for the feature guide or run the 60-second guided demo.
 
 ![SentinelGrid operator dashboard (dark theme)](docs/images/dashboard-dark.png)
 

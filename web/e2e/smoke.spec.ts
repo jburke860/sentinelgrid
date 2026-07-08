@@ -123,6 +123,28 @@ test("perf overlay reports healthy tick cost and bounded marker count", async ({
   expect(badges).toBeLessThan(900); // culling keeps the DOM bounded
 });
 
+test("help hub opens with ?, and the guided demo drives the app", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".leaflet-container")).toBeVisible();
+  // First-visit nudge appears, then ? opens the hub on the Features tab.
+  await expect(page.getByText("New here?")).toBeVisible();
+  await page.keyboard.press("?");
+  await expect(page.getByRole("dialog", { name: "Help" })).toBeVisible();
+  await expect(page.getByText("Zoom navigation")).toBeVisible();
+  // How-it-works and Shortcuts tabs render.
+  await page.getByRole("button", { name: "How it works" }).click();
+  await expect(page.getByText("What is real")).toBeVisible();
+  // Launch the guided demo: narration toast appears, hub closes.
+  await page.getByRole("button", { name: "Features" }).click();
+  await page.getByRole("button", { name: /guided demo/i }).click();
+  await expect(page.getByRole("dialog", { name: "Help" })).toHaveCount(0);
+  await expect(page.getByText(/This is SentinelGrid/)).toBeVisible();
+  // Step 2 injects the hurricane and flies to the Gulf.
+  await expect(page.getByLabel("Region", { exact: true })).toHaveValue("gulf", { timeout: 12_000 });
+  await page.getByRole("button", { name: "skip" }).click();
+  await expect(page.getByText(/This is SentinelGrid|Injecting a hurricane/)).toHaveCount(0);
+});
+
 test("incident detail opens from the queue", async ({ page }) => {
   await page.goto("/");
   const incident = page.locator("li", { hasText: "INC-" }).first();

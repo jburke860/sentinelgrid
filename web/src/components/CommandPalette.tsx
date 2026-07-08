@@ -37,9 +37,14 @@ export function buildCommands(opts: {
   toggleTheme: () => void;
   trigger: (kind: string, regionId: string | null) => void;
   playStoryline: (id: string) => void;
+  openHelp: (tab: "about" | "features" | "how" | "shortcuts") => void;
+  startDemo: () => void;
 }): Command[] {
-  const { snap, regionId, setView, selectRegion, inspectDevice, toggleTheme, trigger, playStoryline } = opts;
+  const { snap, regionId, setView, selectRegion, inspectDevice, toggleTheme, trigger, playStoryline, openHelp, startDemo } = opts;
   const cmds: Command[] = [
+    { id: "a-demo", group: "Actions", label: "Run the 60-second guided demo", run: startDemo },
+    { id: "a-help", group: "Actions", label: "Help: feature guide", hint: "?", run: () => openHelp("features") },
+    { id: "a-how", group: "Actions", label: "Help: how it works", run: () => openHelp("how") },
     { id: "a-theme", group: "Actions", label: "Toggle light / dark theme", run: toggleTheme },
     { id: "a-national", group: "Actions", label: "Go to national overview", run: () => selectRegion(null) },
     { id: "a-report", group: "Actions", label: "Generate report", hint: "print", run: () => window.print() },
