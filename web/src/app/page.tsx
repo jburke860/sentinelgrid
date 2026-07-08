@@ -4,14 +4,18 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AboutModal } from "@/components/AboutModal";
 import { AnomalyPanel } from "@/components/AnomalyPanel";
+import { CommandPalette, buildCommands } from "@/components/CommandPalette";
 import { DeviceDrawer } from "@/components/DeviceDrawer";
 import { DeviceTable } from "@/components/DeviceTable";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FingerprintPanel } from "@/components/FingerprintPanel";
+import { ForecastPanel } from "@/components/ForecastPanel";
 import { IncidentQueue } from "@/components/IncidentQueue";
 import { ModelConfidence } from "@/components/ModelConfidence";
 import { KpiStrip, type KpiPoint } from "@/components/KpiStrip";
+import { PrintReport } from "@/components/PrintReport";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
+import { SituationSummary } from "@/components/SituationSummary";
 import { SideRail, type View } from "@/components/SideRail";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { TimeScrubber } from "@/components/TimeScrubber";
@@ -63,6 +67,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [alertsOn, setAlertsOn] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("overview");
@@ -161,6 +166,12 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   stateRef.current = { snap, viewTime, drawerId, selectedId, regionId, aboutOpen, helpOpen };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // ⌘K works everywhere, even from inside inputs.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
       const target = e.target as HTMLElement | null;
       if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
       const s = stateRef.current;
@@ -235,7 +246,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       incidents: "flex lg:col-span-8 lg:row-span-6",
       devices: "hidden",
       telemetry: "hidden",
-      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-6",
+      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-3",
     },
     nodes: {
       map: "hidden",
@@ -248,8 +259,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       map: "hidden",
       incidents: "hidden",
       devices: "hidden",
-      telemetry: "flex lg:col-span-7 lg:row-span-4",
-      anomaly: "hidden lg:flex lg:col-span-7 lg:row-span-2",
+      telemetry: "flex lg:col-span-7 lg:row-span-3",
+      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-3",
     },
   };
   const panelClass = (panel: string) => LAYOUTS[view][panel];
@@ -263,8 +274,25 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     { id: "analytics", label: "Analytics" },
   ];
 
+  const commands = useMemo(
+    () =>
+      buildCommands({
+        snap,
+        regionId,
+        setView,
+        selectRegion,
+        inspectDevice,
+        toggleTheme,
+        trigger: (kind, r) => engine.trigger(kind as Parameters<typeof engine.trigger>[0], r),
+        playStoryline: (id) => engine.playStoryline(id),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [snap, regionId, theme],
+  );
+
   return (
-    <div className="flex h-dvh min-h-0 flex-col">
+    <>
+    <div className="flex h-dvh min-h-0 flex-col print:hidden">
       <header className="shrink-0">
         <TopBar
           engine={engine}
@@ -275,6 +303,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           alertsOn={alertsOn}
           onToggleAlerts={toggleAlerts}
           onOpenAbout={() => setAboutOpen(true)}
+          onOpenPalette={() => setPaletteOpen(true)}
           onSelectRegion={selectRegion}
         />
         <KpiStrip snap={snap} history={kpiHistory.current} onSelectRegion={selectRegion} />
@@ -382,9 +411,22 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         </div>
 
         {view === "analytics" && (
-          <div className="flex min-h-0 lg:col-span-5 lg:row-span-4">
+          <div className="flex min-h-0 lg:col-span-5 lg:row-span-3">
             <ErrorBoundary label="Anomaly fingerprint">
               <FingerprintPanel accent="#06b6d4" device={fingerprintDevice} auto={!selected} />
+            </ErrorBoundary>
+          </div>
+        )}
+
+        {view === "incidents" && (
+          <div className="hidden min-h-0 lg:flex lg:col-span-4 lg:row-span-3">
+            <ErrorBoundary label="Situation summary">
+              <SituationSummary
+                accent="#8b5cf6"
+                snap={snap}
+                history={kpiHistory.current}
+                onSelectRegion={selectRegion}
+              />
             </ErrorBoundary>
           </div>
         )}
@@ -396,11 +438,18 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         </div>
 
         {view === "analytics" && (
-          <div className="hidden min-h-0 lg:flex lg:col-span-5 lg:row-span-2">
-            <ErrorBoundary label="Model confidence">
-              <ModelConfidence accent="#10b981" snap={snap} />
-            </ErrorBoundary>
-          </div>
+          <>
+            <div className="hidden min-h-0 lg:flex lg:col-span-4 lg:row-span-3">
+              <ErrorBoundary label="Forecast outlook">
+                <ForecastPanel accent="#0ea5e9" snap={snap} device={fingerprintDevice} />
+              </ErrorBoundary>
+            </div>
+            <div className="hidden min-h-0 lg:flex lg:col-span-4 lg:row-span-3">
+              <ErrorBoundary label="Model confidence">
+                <ModelConfidence accent="#10b981" snap={snap} />
+              </ErrorBoundary>
+            </div>
+          </>
         )}
       </main>
       </div>
@@ -422,16 +471,25 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         <span className="tnum hidden md:inline">
           {FLEET.length} nodes · {REGIONS.length} regions · seeded, deterministic
         </span>
-        <span className="ml-auto">
-          Created by <span className="text-ink">Jeremy Burke</span> ·{" "}
-          <a
-            href="https://github.com/jburke860/sentinelgrid"
-            className="text-accent hover:underline"
-            target="_blank"
-            rel="noreferrer"
+        <span className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => window.print()}
+            className="rounded border border-edge bg-panel-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:border-accent/40 hover:text-ink"
+            title="Print a situation report (open incidents, fleet health, activity log)"
           >
-            source on GitHub
-          </a>
+            generate report
+          </button>
+          <span>
+            Created by <span className="text-ink">Jeremy Burke</span> ·{" "}
+            <a
+              href="https://github.com/jburke860/sentinelgrid"
+              className="text-accent hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              source on GitHub
+            </a>
+          </span>
         </span>
       </footer>
 
@@ -446,7 +504,10 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       )}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
+      {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
     </div>
+    <PrintReport snap={snap} />
+    </>
   );
 }
 

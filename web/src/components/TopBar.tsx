@@ -1,13 +1,14 @@
 "use client";
 
-import { Bell, BellOff, Database, Info, Moon, Pause, Play, RotateCcw, Sun } from "lucide-react";
+import { Bell, BellOff, Database, Info, Moon, Pause, Play, RotateCcw, Search, Sun } from "lucide-react";
 import Image from "next/image";
 import logo from "@/app/logo.png";
 import { HAZARDS } from "@/lib/sim/hazards";
 import { STORYLINES } from "@/lib/sim/storylines";
 import type { DataEngine, HazardKind, ScenarioKind, SimSnapshot } from "@/lib/sim/types";
 import { HazardIcon } from "./icons";
-import { CtrlButton } from "./ui";
+import { SavedViews } from "./SavedViews";
+import { CtrlButton, Kbd } from "./ui";
 
 export function TopBar({
   engine,
@@ -18,6 +19,7 @@ export function TopBar({
   alertsOn,
   onToggleAlerts,
   onOpenAbout,
+  onOpenPalette,
   onSelectRegion,
 }: {
   engine: DataEngine;
@@ -28,6 +30,7 @@ export function TopBar({
   alertsOn: boolean;
   onToggleAlerts: () => void;
   onOpenAbout: () => void;
+  onOpenPalette: () => void;
   onSelectRegion: (id: string | null) => void;
 }) {
   const region = regionId ? snap.regions.find((r) => r.id === regionId) : null;
@@ -87,6 +90,14 @@ export function TopBar({
       </div>
 
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <button
+          onClick={onOpenPalette}
+          title="Search nodes, regions, incidents, actions (⌘K)"
+          className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-panel-2 px-2 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:border-accent/40 hover:text-ink"
+        >
+          <Search size={12} aria-hidden /> search <Kbd>⌘K</Kbd>
+        </button>
+        <SavedViews regionId={regionId} onSelectRegion={onSelectRegion} />
         <CtrlButton onClick={() => engine.setRunning(!snap.running)} title="Pause or resume (Space)">
           {snap.running ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
         </CtrlButton>

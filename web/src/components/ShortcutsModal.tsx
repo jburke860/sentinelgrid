@@ -3,6 +3,7 @@
 import { Kbd } from "./ui";
 
 const SHORTCUTS: Array<[string, string]> = [
+  ["⌘K", "Command palette — search everything"],
   ["Space", "Pause / resume the simulation"],
   ["← / →", "Step backward / forward through playback"],
   ["0", "National overview"],

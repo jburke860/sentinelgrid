@@ -391,6 +391,21 @@ export default function MapView({
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+
+  // Saved-view presets hand layer combinations over via a window event
+  // (SavedViews also writes localStorage for the next mount).
+  useEffect(() => {
+    const onApply = (e: Event) => {
+      const detail = (e as CustomEvent).detail as Partial<LayerState>;
+      setLayers((prev) => {
+        const next = { ...prev, ...detail };
+        localStorage.setItem("sg-map-layers", JSON.stringify(next));
+        return next;
+      });
+    };
+    window.addEventListener("sg-apply-layers", onApply);
+    return () => window.removeEventListener("sg-apply-layers", onApply);
+  }, []);
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void wrapRef.current?.requestFullscreen();

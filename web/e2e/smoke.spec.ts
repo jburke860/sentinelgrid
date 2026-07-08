@@ -79,6 +79,25 @@ test("analytics view shows fingerprint, pattern match, and model confidence", as
   await expect(page.getByText("zscore-baseline v0.2").first()).toBeVisible();
 });
 
+test("command palette navigates to a region", async ({ page }) => {
+  await page.goto("/");
+  // Wait for the app to hydrate before sending the shortcut.
+  await expect(page.locator(".leaflet-container")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  const input = page.getByLabel("Command search");
+  await expect(input).toBeVisible();
+  await input.fill("gulf");
+  await page.getByRole("button", { name: /Go to Gulf Coast/ }).click();
+  await expect(page.getByLabel("Region", { exact: true })).toHaveValue("gulf");
+});
+
+test("incidents view shows the rule-based situation summary", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Incidents" }).click();
+  await expect(page.getByText("Situation Summary")).toBeVisible();
+  await expect(page.getByText("auto-generated · rule-based")).toBeVisible();
+});
+
 test("incident detail opens from the queue", async ({ page }) => {
   await page.goto("/");
   const incident = page.locator("li", { hasText: "INC-" }).first();
