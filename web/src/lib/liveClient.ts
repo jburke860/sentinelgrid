@@ -44,6 +44,7 @@ const EMPTY: SimSnapshot = {
   storyline: null,
   regions: [],
   devices: [],
+  mesh: [],
   incidents: [],
   events: [],
 };

@@ -24,7 +24,7 @@ function CountUp({ value }: { value: number }) {
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value]);
-  return <>{display}</>;
+  return <>{display.toLocaleString()}</>;
 }
 
 /** One KPI sample per engine tick, kept in a short ring buffer by the page. */
@@ -73,13 +73,16 @@ export function KpiStrip({
   history: KpiPoint[];
   onSelectRegion: (id: string | null) => void;
 }) {
-  const online = snap.devices.filter((d) => d.status !== "offline").length;
+  // Both tiers count: flagships + the simulated mesh.
+  const online = snap.devices.filter((d) => d.status !== "offline").length + snap.mesh.length;
+  const total = snap.devices.length + snap.mesh.length;
   const open = snap.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length;
-  const peak = Math.max(0, ...snap.devices.map((d) => (d.status === "offline" ? 0 : (d.latest?.riskScore ?? 0))));
+  let peak = Math.max(0, ...snap.devices.map((d) => (d.status === "offline" ? 0 : (d.latest?.riskScore ?? 0))));
+  for (const m of snap.mesh) if (m.latest && m.latest.riskScore > peak) peak = m.latest.riskScore;
 
   // Anomaly counts by hazard: elevated (≥ watch) devices grouped by top hazard.
   const byHazard = new Map<HazardKind, { count: number; regionId: string }>();
-  for (const d of snap.devices) {
+  for (const d of [...snap.devices, ...snap.mesh]) {
     if (d.status === "offline" || !d.latest || d.latest.riskScore < 25) continue;
     const cur = byHazard.get(d.latest.topHazard);
     byHazard.set(d.latest.topHazard, { count: (cur?.count ?? 0) + 1, regionId: d.regionId });
@@ -97,7 +100,7 @@ export function KpiStrip({
             <span className="text-ok">
               <CountUp value={online} />
             </span>
-            <span className="opacity-50">/{snap.devices.length}</span>
+            <span className="opacity-50">/{total.toLocaleString()}</span>
           </>
         }
         spark={history.map((h) => h.online)}

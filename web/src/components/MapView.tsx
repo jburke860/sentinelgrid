@@ -225,6 +225,85 @@ function HeatLayer({
   return null;
 }
 
+/**
+ * Mesh tier renderer: thousands of nodes as cheap canvas dots with viewport
+ * culling. Managed imperatively (a Leaflet marker pool on one shared canvas
+ * renderer) — mounting 3,000 react-leaflet components per tick would swamp
+ * React, so React only owns this component, not the dots.
+ */
+const MESH_CAP = 700;
+
+function MeshDots({ nodes, onSelect }: { nodes: DeviceView[]; onSelect: (id: string) => void }) {
+  const map = useMap();
+  const poolRef = useRef(new Map<string, L.CircleMarker>());
+  const rendererRef = useRef<L.Canvas | null>(null);
+  if (!rendererRef.current) rendererRef.current = L.canvas({ padding: 0.2 });
+  const latest = useRef({ nodes, onSelect });
+  latest.current = { nodes, onSelect };
+
+  const redraw = () => {
+    const { nodes: all } = latest.current;
+    const bounds = map.getBounds().pad(0.1);
+    const zoom = map.getZoom();
+    const radius = zoom >= DETAIL_ZOOM ? 3.5 : 2.5;
+    const inView: DeviceView[] = [];
+    for (const d of all) {
+      if (d.latest && bounds.contains([d.latest.lat, d.latest.lon])) inView.push(d);
+    }
+    // Over the cap, keep the riskiest — the heat layer already shows the rest.
+    if (inView.length > MESH_CAP) {
+      inView.sort((a, b) => (b.latest?.riskScore ?? 0) - (a.latest?.riskScore ?? 0));
+      inView.length = MESH_CAP;
+    }
+    const pool = poolRef.current;
+    const keep = new Set<string>();
+    for (const d of inView) {
+      keep.add(d.deviceId);
+      const color = RISK_COLORS[d.latest!.riskLevel];
+      let marker = pool.get(d.deviceId);
+      if (!marker) {
+        marker = L.circleMarker([d.latest!.lat, d.latest!.lon], {
+          renderer: rendererRef.current!,
+          radius,
+          stroke: false,
+          fillColor: color,
+          fillOpacity: 0.8,
+        });
+        marker.on("click", () => latest.current.onSelect(d.deviceId));
+        marker.bindTooltip(() => {
+          const cur = latest.current.nodes.find((n) => n.deviceId === d.deviceId);
+          return `${d.displayName} · ${d.locality ?? ""} · risk ${cur?.latest?.riskScore ?? "—"}`;
+        });
+        marker.addTo(map);
+        pool.set(d.deviceId, marker);
+      } else {
+        marker.setStyle({ fillColor: color, radius });
+      }
+    }
+    for (const [id, marker] of pool) {
+      if (!keep.has(id)) {
+        marker.remove();
+        pool.delete(id);
+      }
+    }
+  };
+
+  useMapEvents({ moveend: () => redraw(), zoomend: () => redraw() });
+  useEffect(() => {
+    redraw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
+  useEffect(
+    () => () => {
+      for (const marker of poolRef.current.values()) marker.remove();
+      poolRef.current.clear();
+    },
+     
+    [],
+  );
+  return null;
+}
+
 /** Imperial+metric scale bar in the bottom-left corner. */
 function ScaleBar() {
   const map = useMap();
@@ -326,6 +405,7 @@ function LayerRow({
 export default function MapView({
   theme,
   devices,
+  mesh,
   incidents,
   regions,
   scenarios,
@@ -337,6 +417,7 @@ export default function MapView({
 }: {
   theme: "light" | "dark";
   devices: DeviceView[];
+  mesh: DeviceView[];
   incidents: Incident[];
   regions: RegionView[];
   scenarios: ScenarioState[];
@@ -411,7 +492,11 @@ export default function MapView({
     else void wrapRef.current?.requestFullscreen();
   };
 
-  const online = useMemo(() => devices.filter((d) => d.status !== "offline" && d.latest), [devices]);
+  // Both tiers feed the scalar fields — the mesh is what makes them dense.
+  const online = useMemo(
+    () => [...devices, ...mesh].filter((d) => d.status !== "offline" && d.latest),
+    [devices, mesh],
+  );
 
   const riskPoints = useMemo<Array<[number, number, number]>>(
     () =>
@@ -436,6 +521,9 @@ export default function MapView({
     }
     return out;
   }, [online, layers]);
+
+  const selectedMesh =
+    selectedId?.startsWith("mesh-") === true ? (mesh.find((d) => d.deviceId === selectedId) ?? null) : null;
 
   const visibleScenarios = layers.epicenters
     ? scenarios.filter((s) => s.epicenter && s.kind !== "dropout")
@@ -514,6 +602,28 @@ export default function MapView({
         {METRIC_HEAT.filter((cfg) => layers[cfg.id]).map((cfg) => (
           <HeatLayer key={cfg.id} points={metricPoints[cfg.id] ?? []} gradient={cfg.gradient} />
         ))}
+
+        {/* Mesh tier: culled canvas dots under the flagship badges. */}
+        <MeshDots nodes={mesh} onSelect={onSelect} />
+        {selectedMesh?.latest && (
+          <Marker
+            position={[selectedMesh.latest.lat, selectedMesh.latest.lon]}
+            icon={riskBadge({
+              score: selectedMesh.latest.riskScore,
+              color: RISK_COLORS[selectedMesh.latest.riskLevel],
+              selected: true,
+            })}
+            zIndexOffset={600}
+            eventHandlers={{ click: () => onSelect(selectedMesh.deviceId) }}
+          >
+            <Tooltip direction="top" offset={[0, -12]} opacity={0.95}>
+              <span className="font-mono text-xs">
+                {selectedMesh.displayName}
+                {selectedMesh.locality ? ` · ${selectedMesh.locality}` : ""}
+              </span>
+            </Tooltip>
+          </Marker>
+        )}
 
         {/* Correlation arcs: storm center → each incident it spawned. */}
         {arcs.map((a) => (

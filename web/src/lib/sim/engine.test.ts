@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SimEngine } from "./engine";
 import { FLEET, REGIONS } from "./fleet";
+import { MESH_COUNT } from "./mesh";
 
 // Drive the engine synchronously without timers.
 function stepN(engine: SimEngine, n: number) {
@@ -194,6 +195,42 @@ describe("SimEngine", () => {
     stepN(e, 300);
     const fresh = e.getSnapshot().incidents.filter((i) => i.openedAt > t0);
     expect(fresh).toHaveLength(0);
+  });
+
+  it("boots the mesh tier with a reading on every node", () => {
+    const snap = new SimEngine(42).getSnapshot();
+    expect(snap.mesh).toHaveLength(MESH_COUNT);
+    for (const m of snap.mesh) {
+      expect(m.latest).not.toBeNull();
+      expect(m.latest!.riskScore).toBeGreaterThanOrEqual(0);
+      expect(m.latest!.riskScore).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("mesh readings are deterministic across engines", () => {
+    const grab = () => {
+      const e = new SimEngine(42);
+      stepN(e, 30);
+      return e.getSnapshot().mesh.slice(0, 25).map((m) => [m.deviceId, m.latest?.riskScore, m.latest?.values.temperature_c]);
+    };
+    expect(grab()).toEqual(grab());
+  });
+
+  it("regenerates mesh history on demand, ending at the current reading", () => {
+    const e = new SimEngine(42);
+    // Enough sim time for the full ~6h regeneration window to exist.
+    stepN(e, 640);
+    const node = e.getSnapshot().mesh[7];
+    const series = e.getSeries(node.deviceId);
+    expect(series.length).toBeGreaterThan(200);
+    for (let i = 1; i < series.length; i++) expect(series[i].t).toBeGreaterThan(series[i - 1].t);
+    // The regenerated tail must exactly reproduce what the node last reported.
+    const last = series[series.length - 1];
+    expect(last.t).toBe(node.latest!.t);
+    expect(last.values).toEqual(node.latest!.values);
+    expect(last.riskScore).toBe(node.latest!.riskScore);
+    // ...and a second regeneration is identical (pure function of state).
+    expect(e.getSeries(node.deviceId)).toEqual(series);
   });
 
   it("reconstructs past state for the playback scrubber", () => {

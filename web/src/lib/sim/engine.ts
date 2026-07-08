@@ -1,6 +1,7 @@
 import { BASELINE_STD, expectedValues } from "./baselines";
 import { FLEET, REGION_BY_ID, REGIONS } from "./fleet";
 import { HAZARDS } from "./hazards";
+import { MESH_NODES, meshNormal, meshStatic, type MeshNodeSpec } from "./mesh";
 import { Rng } from "./rng";
 import { STORYLINE_BY_ID } from "./storylines";
 import {
@@ -44,11 +45,40 @@ const DRIFT_RATE = 0.02;
 const DRIFT_CAP = 5; // drift offset saturates at ±5σ — broken, not apocalyptic
 const DRIFT_QUARANTINE_STREAK = 4; // consecutive ticks of evidence before quarantining
 const MAX_CONCURRENT_SCENARIOS = 3; // one per region, up to three regions at once
+// Mesh nodes update in round-robin cohorts (1/3 per tick) and carry no
+// per-node state: a reading is a pure function of (node, round, scenarios).
+const MESH_COHORTS = 3;
+const MESH_SERIES_POINTS = 240; // on-demand history: ~6h at one point per cohort round
+
+const NOISE: Record<Metric, number> = {
+  temperature_c: 1.2,
+  humidity_pct: 4,
+  pm25_ugm3: 4,
+  smoke_ppm: 0.6,
+  water_level_m: 0.06,
+  wind_speed_mps: 0.9,
+};
+const FLOORS: Record<Metric, number> = {
+  temperature_c: -40,
+  humidity_pct: 2,
+  pm25_ugm3: 0,
+  smoke_ppm: 0,
+  water_level_m: 0,
+  wind_speed_mps: 0,
+};
 
 interface ActiveScenario extends ScenarioState {
   from: [number, number];
   to: [number, number];
   radius: number;
+}
+
+/** Scenario lifecycle envelope: ramp → plateau → decay. */
+function envelopeAt(p: number): number {
+  if (p < 0 || p >= 1) return 0;
+  if (p < 0.3) return p / 0.3;
+  if (p < 0.6) return 1;
+  return Math.max(0, (1 - p) / 0.4);
 }
 
 interface DeviceState {
@@ -78,6 +108,9 @@ export class SimEngine implements DataEngine {
   private incidents: Incident[] = [];
   private events: LogEvent[] = [];
   private scenarios: ActiveScenario[] = [];
+  private mesh: DeviceView[] = [];
+  /** Off during most of backfill — mesh has no history, only the last state matters. */
+  private meshActive = false;
   private scenarioSeq = 0;
   private storyline: { spec: StorylineSpec; startTick: number; fired: number } | null = null;
   private simTime: number;
@@ -103,9 +136,10 @@ export class SimEngine implements DataEngine {
     this.rng = new Rng(seed);
     this.simTime = Date.now() - BACKFILL_TICKS * TICK_SIM_MS;
     this.initDevices();
+    this.initMesh();
     this.pushEvent(
       "system",
-      `Simulation initialized with seed ${seed}: ${FLEET.length} virtual nodes across ${REGIONS.length} regions`,
+      `Simulation initialized with seed ${seed}: ${FLEET.length} flagship + ${MESH_NODES.length} mesh nodes across ${REGIONS.length} regions`,
     );
     if (this.replay && this.anchor) {
       this.pushEvent(
@@ -113,7 +147,10 @@ export class SimEngine implements DataEngine {
         `Baselines anchored to public observations fetched ${this.anchor.fetchedAt.slice(0, 16)}Z (NWS/USGS)`,
       );
     }
-    for (let i = 0; i < BACKFILL_TICKS; i++) this.step();
+    for (let i = 0; i < BACKFILL_TICKS; i++) {
+      this.meshActive = i >= BACKFILL_TICKS - MESH_COHORTS;
+      this.step();
+    }
     this.snapshot = this.buildSnapshot();
   }
 
@@ -147,8 +184,12 @@ export class SimEngine implements DataEngine {
     this.autopilotCursor = 0;
     this.simTime = Date.now() - BACKFILL_TICKS * TICK_SIM_MS;
     this.initDevices();
+    this.initMesh();
     this.pushEvent("system", `Simulation reset with seed ${this.seed}`);
-    for (let i = 0; i < BACKFILL_TICKS; i++) this.step();
+    for (let i = 0; i < BACKFILL_TICKS; i++) {
+      this.meshActive = i >= BACKFILL_TICKS - MESH_COHORTS;
+      this.step();
+    }
     this.publish();
   }
 
@@ -161,11 +202,33 @@ export class SimEngine implements DataEngine {
 
   /** Fine-grained recent history preceded by 5-minute downsampled history. */
   getSeries(deviceId: string): Reading[] {
+    if (deviceId.startsWith("mesh-")) return this.meshSeries(deviceId);
     const d = this.devices.get(deviceId);
     if (!d) return [];
     const fineStart = d.history[0]?.t ?? Infinity;
     const older = d.coarse.filter((r) => r.t < fineStart);
     return older.length ? [...older, ...d.history] : d.history;
+  }
+
+  /**
+   * Mesh history is never stored — it's regenerated on demand. Readings are a
+   * pure function of (node, cohort round, scenario state), so replaying the
+   * last ~6h of rounds reproduces exactly what the node would have reported.
+   * Scenarios that already dissipated aren't reconstructed.
+   */
+  private meshSeries(deviceId: string): Reading[] {
+    const idx = Number(deviceId.slice(5));
+    const node = MESH_NODES[idx];
+    const current = this.mesh[idx]?.latest;
+    if (!node || !current) return [];
+    const lastRound = current.sequence;
+    const out: Reading[] = [];
+    for (let k = MESH_SERIES_POINTS; k >= 0; k--) {
+      const round = lastRound - k;
+      if (round < 0) continue;
+      out.push(this.buildMeshReading(node, round));
+    }
+    return out;
   }
 
   /** Historical view for the playback scrubber: state as of sim time t. */
@@ -315,6 +378,110 @@ export class SimEngine implements DataEngine {
     }
   }
 
+  private initMesh() {
+    this.mesh = MESH_NODES.map((spec) => ({
+      ...spec,
+      status: "online" as const,
+      lastSeenAt: null,
+      latest: null,
+    }));
+    this.meshActive = false;
+  }
+
+  /** Weighted positive-z hazard score over a region's hazards. */
+  private scoreHazards(
+    region: RegionSpec,
+    zs: Record<Metric, number>,
+    quarantined?: Set<Metric>,
+  ): { topHazard: HazardKind; riskScore: number } {
+    let topHazard: HazardKind = region.hazards[0];
+    let topScore = 0;
+    for (const h of region.hazards) {
+      let s = 0;
+      for (const term of HAZARDS[h].terms) {
+        if (quarantined?.has(term.metric)) continue;
+        s += term.weight * Math.max(0, term.dir * zs[term.metric]);
+      }
+      if (s > topScore) {
+        topScore = s;
+        topHazard = h;
+      }
+    }
+    return { topHazard, riskScore: Math.min(100, Math.max(0, Math.round(topScore * 16))) };
+  }
+
+  /**
+   * A mesh node's reading for a given cohort round — deterministic, stateless.
+   * Round r corresponds to tick r*MESH_COHORTS + (index % MESH_COHORTS).
+   */
+  private buildMeshReading(node: MeshNodeSpec, round: number): Reading {
+    const region = REGION_BY_ID.get(node.regionId)!;
+    const tick = round * MESH_COHORTS + (node.meshIndex % MESH_COHORTS);
+    const dtTicks = tick - this.tickCount;
+    const t = this.simTime + dtTicks * TICK_SIM_MS;
+    const expected = this.expectedValues(region, t);
+
+    // Scenario forcing back-cast: active scenarios' envelopes and (for moving
+    // systems) epicenter tracks are fully known, so past intensity is exact.
+    const delta = {} as Record<Metric, number>;
+    for (const m of METRICS) delta[m] = 0;
+    for (const s of this.scenarios) {
+      if (s.kind === "dropout" || s.regionId !== node.regionId || !s.epicenter) continue;
+      const p = (s.ticks + dtTicks) / s.duration;
+      if (p < 0 || p >= 1) continue;
+      const epi: [number, number] = s.moving
+        ? [s.from[0] + (s.to[0] - s.from[0]) * p, s.from[1] + (s.to[1] - s.from[1]) * p]
+        : s.from;
+      const dist = Math.hypot(node.lat - epi[0], node.lon - epi[1]);
+      const intensity = envelopeAt(p) * Math.exp(-((dist / s.radius) ** 2));
+      if (intensity < 0.02) continue;
+      const deltas = HAZARDS[s.kind as HazardKind].deltas;
+      for (const m of METRICS) delta[m] += (deltas[m] ?? 0) * intensity;
+    }
+
+    const values = {} as Record<Metric, number>;
+    const zs = {} as Record<Metric, number>;
+    for (let mi = 0; mi < METRICS.length; mi++) {
+      const m = METRICS[mi];
+      const v = expected[m] + meshNormal(node.meshIndex, round, mi) * NOISE[m] + delta[m];
+      values[m] = Math.max(FLOORS[m], m === "humidity_pct" ? Math.min(100, v) : v);
+      zs[m] = (values[m] - expected[m]) / BASELINE_STD[m];
+    }
+    const { topHazard, riskScore } = this.scoreHazards(region, zs);
+    const contributions: Contribution[] = METRICS.map((m) => ({
+      metric: m,
+      value: values[m],
+      z: zs[m],
+      quarantined: false,
+    })).sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+
+    return {
+      deviceId: node.deviceId,
+      t,
+      lat: node.lat,
+      lon: node.lon,
+      values,
+      batteryPct: 55 + meshStatic(node.meshIndex, 1) * 43,
+      rssiDbm: Math.round(-58 - meshStatic(node.meshIndex, 2) * 28),
+      sequence: round,
+      flags: [],
+      riskScore,
+      riskLevel:
+        riskScore >= 75 ? "critical" : riskScore >= 50 ? "warning" : riskScore >= 25 ? "watch" : "normal",
+      topHazard,
+      contributions,
+    };
+  }
+
+  private stepMeshCohort() {
+    const cohort = this.tickCount % MESH_COHORTS;
+    const round = (this.tickCount - cohort) / MESH_COHORTS;
+    for (let i = cohort; i < MESH_NODES.length; i += MESH_COHORTS) {
+      const reading = this.buildMeshReading(MESH_NODES[i], round);
+      this.mesh[i] = { ...this.mesh[i], lastSeenAt: reading.t, latest: reading };
+    }
+  }
+
   private publish() {
     this.snapshot = this.buildSnapshot();
     for (const l of this.listeners) l();
@@ -328,12 +495,23 @@ export class SimEngine implements DataEngine {
       latest: d.history.length ? d.history[d.history.length - 1] : null,
     }));
 
+    // Region peaks consider both tiers — a hazard sweeping mesh nodes should
+    // light the national badge even between flagship stations.
+    const meshPeak = new Map<string, number>();
+    for (const m of this.mesh) {
+      if (!m.latest) continue;
+      if (m.latest.riskScore > (meshPeak.get(m.regionId) ?? 0)) meshPeak.set(m.regionId, m.latest.riskScore);
+    }
+
     const regions: RegionView[] = REGIONS.map((r) => {
       const devs = deviceViews.filter((d) => d.regionId === r.id);
       const open = this.incidents.filter(
         (i) => i.regionId === r.id && i.status !== "resolved" && i.status !== "dismissed",
       ).length;
-      const peakRisk = Math.max(0, ...devs.map((d) => (d.status === "offline" ? 0 : d.latest?.riskScore ?? 0)));
+      const peakRisk = Math.max(
+        meshPeak.get(r.id) ?? 0,
+        ...devs.map((d) => (d.status === "offline" ? 0 : d.latest?.riskScore ?? 0)),
+      );
       const peakLevel: RiskLevel =
         peakRisk >= 75 ? "critical" : peakRisk >= 50 ? "warning" : peakRisk >= 25 ? "watch" : "normal";
       return {
@@ -370,6 +548,7 @@ export class SimEngine implements DataEngine {
         : null,
       regions,
       devices: deviceViews,
+      mesh: [...this.mesh],
       incidents: this.incidents.map((i) => ({ ...i, timeline: [...i.timeline] })).reverse(),
       events: this.events.slice(-80).reverse(),
     };
@@ -458,10 +637,7 @@ export class SimEngine implements DataEngine {
   }
 
   private envelope(s: ActiveScenario): number {
-    const p = s.ticks / s.duration;
-    if (p < 0.3) return p / 0.3;
-    if (p < 0.6) return 1;
-    return Math.max(0, (1 - p) / 0.4);
+    return envelopeAt(s.ticks / s.duration);
   }
 
   /** Expected baseline per metric for a region at time t (the "no anomaly" state). */
@@ -528,6 +704,7 @@ export class SimEngine implements DataEngine {
     for (const state of this.devices.values()) {
       this.stepDevice(state, byRegion.get(state.region.id) ?? []);
     }
+    if (this.meshActive) this.stepMeshCohort();
     this.reconcileIncidents();
   }
 
@@ -598,28 +775,11 @@ export class SimEngine implements DataEngine {
       for (const m of METRICS) scenarioDelta[m] += (deltas[m] ?? 0) * intensity;
     }
 
-    const noise: Record<Metric, number> = {
-      temperature_c: 1.2,
-      humidity_pct: 4,
-      pm25_ugm3: 4,
-      smoke_ppm: 0.6,
-      water_level_m: 0.06,
-      wind_speed_mps: 0.9,
-    };
-    const floors: Record<Metric, number> = {
-      temperature_c: -40,
-      humidity_pct: 2,
-      pm25_ugm3: 0,
-      smoke_ppm: 0,
-      water_level_m: 0,
-      wind_speed_mps: 0,
-    };
-
     const values = {} as Record<Metric, number>;
     for (const m of METRICS) {
-      let v = this.rng.normal(expected[m], noise[m]) + scenarioDelta[m];
+      let v = this.rng.normal(expected[m], NOISE[m]) + scenarioDelta[m];
       if (state.drift?.metric === m) v += state.drift.offset;
-      values[m] = Math.max(floors[m], m === "humidity_pct" ? Math.min(100, v) : v);
+      values[m] = Math.max(FLOORS[m], m === "humidity_pct" ? Math.min(100, v) : v);
     }
 
     // Rolling baseline (EWMA) for drift detection. A metric whose slow
@@ -659,20 +819,7 @@ export class SimEngine implements DataEngine {
     const zs = {} as Record<Metric, number>;
     for (const m of METRICS) zs[m] = (values[m] - expected[m]) / BASELINE_STD[m];
 
-    let topHazard: HazardKind = region.hazards[0];
-    let topScore = 0;
-    for (const h of region.hazards) {
-      let s = 0;
-      for (const term of HAZARDS[h].terms) {
-        if (quarantined.has(term.metric)) continue;
-        s += term.weight * Math.max(0, term.dir * zs[term.metric]);
-      }
-      if (s > topScore) {
-        topScore = s;
-        topHazard = h;
-      }
-    }
-    const riskScore = Math.min(100, Math.max(0, Math.round(topScore * 16)));
+    const { topHazard, riskScore } = this.scoreHazards(region, zs, quarantined);
     const riskLevel: RiskLevel =
       riskScore >= 75 ? "critical" : riskScore >= 50 ? "warning" : riskScore >= 25 ? "watch" : "normal";
 

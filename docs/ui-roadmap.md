@@ -107,3 +107,99 @@ Each phase = one PR-sized push, verified with the existing suite
 (typecheck / lint / vitest / Playwright + screenshot review in both themes).
 Phase order is chosen so the app never looks half-migrated: shell first,
 then map, then panels, then ops sugar, then polish.
+
+---
+
+# Roadmap v2 — density, real data, depth (phases 6-9)
+
+Phases 1-5 delivered the ops-platform shell. v2 closes the remaining gaps:
+node density (the mocks' "national mesh" feel), real hazard feeds, physical
+depth in the sim, and hardening. Same rules as v1: every number derived, no
+decorative fake data, each phase independently shippable.
+
+## Phase 6 — Mesh fleet (the density jump)
+
+Goal: ~150 flagship + ~3,000 procedural mesh nodes without blowing up memory
+or the DOM.
+
+1. **Procedural mesh generation** (`sim/mesh.ts`): seeded generator placing
+   ~3,000 nodes population-weighted around metro anchors, strung along
+   coasts/river corridors, sparse elsewhere. Names like
+   "Mesh 2841 · Amarillo, TX" from a nearest-anchor lookup. Each node gets a
+   region assignment (nearest region within radius, else standalone).
+2. **Latest-only tier**: mesh nodes carry a single current reading — no
+   history arrays, no stored contributions (~5 MB for 3k nodes). Engine steps
+   them in staggered cohorts (1/3 per tick) with the same baseline +
+   scenario-forcing math, cheaper noise path.
+3. **On-demand history**: mesh node click → deterministically regenerate its
+   recent series from the per-device seeded RNG (no storage, exact replay).
+   Telemetry panel works for any node.
+4. **Rendering at scale**: flagship nodes keep divIcon badges; mesh nodes
+   render as canvas dots with viewport culling (draw only in-bounds, cap
+   ~600) and fade in at detail zoom. Heat layers switch to the full mesh —
+   this is where the national field starts looking alive.
+5. **Scope guards**: KPI strip / region rollups count both tiers; device
+   table gets a "flagship | all" toggle so 3k rows never render at once.
+6. Perf gate: tick ≤ 8 ms at 3k nodes, boot ≤ 1.5 s, heap ≤ 150 MB — measure
+   before merging; drop cohort size if missed.
+
+## Phase 7 — Real data: verified stations + live hazard feeds
+
+1. **Verified-stations tier (real nodes)**: ~900 ASOS/METAR weather stations
+   (temp/humidity/wind via Iowa Environmental Mesonet bulk "currents" — one
+   request per network) plus ~1,000 top USGS stream gauges (water level via
+   state-batched instantaneous-values queries). Rendered as a distinct
+   LIVE-badged node class (different marker shape, slow pulse), with the
+   15-60 min real cadence shown on the node, partial metrics scored by the
+   same z-model against per-station rolling baselines. Real readings, our
+   scoring — never blended with sim nodes.
+2. **Refresh path**: hourly GitHub Action bakes a stations snapshot (same
+   pattern as live-snapshot.json); browser re-fetches the bulk endpoints
+   directly on load (both services allow CORS) with the baked file as
+   fallback so the static export never renders empty.
+3. **NWS active alerts layer**: poll `api.weather.gov/alerts/active`
+   (free, no key) every ~2 min; real warning polygons color-coded by event
+   type (tornado warning, flood watch, red-flag) with details popup.
+4. **USGS earthquakes layer**: past-day M2.5+ GeoJSON feed;
+   magnitude-scaled epicenter rings.
+5. **Live/sim contrast affordance**: real-feed layers and stations get a
+   solid + LIVE-badge treatment vs dashed simulated overlays, so the demo
+   never blurs what's real.
+6. **Feed health in footer**: last-fetch age per feed; graceful degradation
+   (cached payload, dimmed badge) when a feed is down.
+7. Optional, keyed: EPA AirNow PM2.5 monitors behind an env var — demo stays
+   fully functional keyless.
+
+## Phase 8 — Sim depth & correctness
+
+1. **Kind-aware physics**: `coastal` nodes amplify surge/water forcing,
+   `ridge` amplifies wind, `wash` amplifies flood water, `forest` amplifies
+   smoke/PM. One multiplier table in hazards.ts; engine applies per node.
+   Fingerprint/pattern-match get sharper spatial structure for free.
+2. **Float32Array history rewrite**: per-device ring buffers (6 metrics +
+   risk) replacing object arrays; contributions computed on demand
+   everywhere (the telemetry band already proves the inversion). 10-20×
+   memory cut; lets flagship history grow past 24 h.
+3. **Timezone-correct diurnal cycle**: per-region UTC offset so the Gulf
+   peaks at Gulf-afternoon, not viewer-afternoon.
+4. **Unit tests for the v1 panels' math**: hazardMatches, forecast
+   projection (baseline + envelope decay), summary generator, confidence
+   synthesis — pure functions, cheap to lock in.
+
+## Phase 9 — Reach & hardening
+
+1. **Full URL state**: view, theme, layer set, severity filter join
+   region/device in the hash → any screen is a shareable link; saved views
+   become copyable URLs.
+2. **Device drawer v2**: bring the last pre-v1 surface up to standard —
+   header badges, fingerprint mini-radar, kind/locality facts, baseline
+   table.
+3. **Mobile pass**: analytics/ops panels reachable below lg (stacked
+   scroll), map controls thumb-sized, docked scrubber collapses gracefully.
+4. **Accessibility pass**: focus order through rail/palette/modals, live
+   regions for incident alerts, contrast audit on dim text.
+5. **Perf instrumentation**: dev-only fps/heap overlay + a Playwright perf
+   smoke (tick budget, marker count) so density regressions fail CI.
+
+Out of scope (needs accounts, revisit on request): hosted live mode
+(Neon/Fly), custom domain, product analytics.

@@ -222,6 +222,11 @@ export interface SimSnapshot {
   storyline: StorylineState | null;
   regions: RegionView[];
   devices: DeviceView[];
+  /**
+   * Lightweight simulated mesh tier: latest reading only, no incidents or
+   * drift state. Gives the national map density (see sim/mesh.ts).
+   */
+  mesh: DeviceView[];
   incidents: Incident[];
   events: LogEvent[];
 }

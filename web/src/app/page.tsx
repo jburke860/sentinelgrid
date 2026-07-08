@@ -77,9 +77,10 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   // Short ring buffer of fleet KPIs so the header strip can show trends.
   const kpiHistory = useRef<KpiPoint[]>([]);
   useEffect(() => {
-    const online = snap.devices.filter((d) => d.status !== "offline").length;
+    const online = snap.devices.filter((d) => d.status !== "offline").length + snap.mesh.length;
     const open = snap.incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed").length;
-    const peak = Math.max(0, ...snap.devices.map((d) => (d.status === "offline" ? 0 : (d.latest?.riskScore ?? 0))));
+    let peak = Math.max(0, ...snap.devices.map((d) => (d.status === "offline" ? 0 : (d.latest?.riskScore ?? 0))));
+    for (const m of snap.mesh) if (m.latest && m.latest.riskScore > peak) peak = m.latest.riskScore;
     const buf = kpiHistory.current;
     if (buf.length === 0 || buf[buf.length - 1].t !== snap.simTime) {
       buf.push({ t: snap.simTime, online, open, peak });
@@ -115,7 +116,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
   const selectDevice = (id: string) => {
     setSelectedId(id);
-    const dev = snap.devices.find((d) => d.deviceId === id);
+    const dev = snap.devices.find((d) => d.deviceId === id) ?? snap.mesh.find((d) => d.deviceId === id);
     if (dev && regionId !== dev.regionId) setRegionId(dev.regionId);
   };
   const selectRegion = (id: string | null) => {
@@ -213,7 +214,11 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
   const scopedDevices = regionId ? viewData.devices.filter((d) => d.regionId === regionId) : viewData.devices;
   const scopedIncidents = regionId ? viewData.incidents.filter((i) => i.regionId === regionId) : viewData.incidents;
-  const selected = viewData.devices.find((d) => d.deviceId === selectedId) ?? null;
+  const scopedMesh = regionId ? snap.mesh.filter((d) => d.regionId === regionId) : snap.mesh;
+  const selected =
+    viewData.devices.find((d) => d.deviceId === selectedId) ??
+    snap.mesh.find((d) => d.deviceId === selectedId) ??
+    null;
   // Fingerprint target: the selected node, else the riskiest online node.
   const fingerprintDevice =
     selected ??
@@ -224,7 +229,11 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           : best,
       null,
     );
-  const drawerDevice = drawerId ? (viewData.devices.find((d) => d.deviceId === drawerId) ?? null) : null;
+  const drawerDevice = drawerId
+    ? (viewData.devices.find((d) => d.deviceId === drawerId) ??
+      snap.mesh.find((d) => d.deviceId === drawerId) ??
+      null)
+    : null;
   const regionName = regionId
     ? (snap.regions.find((r) => r.id === regionId)?.name ?? "")
     : "National Overview";
@@ -267,7 +276,12 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const panelClass = (panel: string) => LAYOUTS[view][panel];
 
   const onlineCount = snap.devices.filter((d) => d.status !== "offline").length;
-  const readingsPerMin = onlineCount * (snap.mode === "sim" ? 40 * snap.speed : 30);
+  // Flagships report every tick; mesh cohorts report every third tick.
+  const readingsPerMin = Math.round(
+    snap.mode === "sim"
+      ? (onlineCount * 40 + snap.mesh.length * (40 / 3)) * snap.speed
+      : onlineCount * 30,
+  );
   const views: Array<{ id: View; label: string; badge?: number }> = [
     { id: "overview", label: "Overview" },
     { id: "incidents", label: "Incidents", badge: openCount },
@@ -275,20 +289,24 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     { id: "analytics", label: "Analytics" },
   ];
 
+  // Built only while the palette is open — at 3k+ mesh entries this is too
+  // much allocation to redo on every engine tick.
   const commands = useMemo(
     () =>
-      buildCommands({
-        snap,
-        regionId,
-        setView,
-        selectRegion,
-        inspectDevice,
-        toggleTheme,
-        trigger: (kind, r) => engine.trigger(kind as Parameters<typeof engine.trigger>[0], r),
-        playStoryline: (id) => engine.playStoryline(id),
-      }),
+      paletteOpen
+        ? buildCommands({
+            snap,
+            regionId,
+            setView,
+            selectRegion,
+            inspectDevice,
+            toggleTheme,
+            trigger: (kind, r) => engine.trigger(kind as Parameters<typeof engine.trigger>[0], r),
+            playStoryline: (id) => engine.playStoryline(id),
+          })
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [snap, regionId, theme],
+    [paletteOpen, snap, regionId, theme],
   );
 
   return (
@@ -359,6 +377,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
               <MapView
                 theme={theme}
                 devices={viewData.devices}
+                mesh={frozen ? [] : snap.mesh}
                 incidents={viewData.incidents}
                 regions={snap.regions}
                 scenarios={frozen ? [] : snap.scenarios}
@@ -391,6 +410,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
             <DeviceTable
               accent="#10b981"
               devices={scopedDevices}
+              mesh={frozen ? [] : scopedMesh}
               showRegion={!regionId}
               selectedId={selectedId}
               onSelect={selectDevice}
@@ -471,7 +491,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         </span>
         <span className="tnum" title="Time since the engine booted">up {fmtDuration(Date.now() - bootAt.current)}</span>
         <span className="tnum hidden md:inline">
-          {FLEET.length} nodes · {REGIONS.length} regions · seeded, deterministic
+          {FLEET.length} flagship + {snap.mesh.length.toLocaleString()} mesh nodes · {REGIONS.length} regions ·
+          seeded, deterministic
         </span>
         <span className="ml-auto flex items-center gap-3">
           <button

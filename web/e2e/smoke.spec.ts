@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test("dashboard boots the simulated fleet", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /SENTINEL/ })).toBeVisible();
-  // All 150 nodes report in.
-  await expect(page.locator("header").getByText("/150")).toBeVisible({ timeout: 20_000 });
+  // The full two-tier fleet reports in (150 flagship + 3,000 mesh).
+  await expect(page.locator("header").getByText("/3,150")).toBeVisible({ timeout: 20_000 });
   // The map mounts with tiles.
   await expect(page.locator(".leaflet-container")).toBeVisible();
 });

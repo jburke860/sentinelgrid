@@ -73,7 +73,7 @@ export function buildCommands(opts: {
       hint: `${r.online}/${r.deviceCount} up · peak ${r.peakRisk}`,
       run: () => selectRegion(r.id),
     })),
-    ...snap.devices.map((d) => ({
+    ...[...snap.devices, ...snap.mesh].map((d) => ({
       id: `n-${d.deviceId}`,
       group: "Nodes" as const,
       label: `${d.displayName}${d.locality ? ` — ${d.locality}` : ""}`,

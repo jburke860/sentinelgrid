@@ -143,7 +143,11 @@ fresh volumes and a matching Alembic revision for existing databases.
 
 ## Fleet
 
-150 virtual nodes in 16 regions (Southern California, Northern California,
+Two simulated tiers: 150 hand-placed flagship nodes with full history,
+incidents, and drift-quarantine state, plus a 3,000-node procedural mesh
+(population-weighted around real metros; latest reading only, history
+regenerated deterministically on demand) that gives the national map its
+density. Flagships span 16 regions (Southern California, Northern California,
 Pacific Northwest, Desert Southwest, Great Basin & Wasatch, Colorado Front
 Range, Texas Triangle, Gulf Coast, Florida Peninsula, Carolinas & Georgia,
 Mississippi Valley, Southern Plains, Upper Midwest, Great Lakes, Mid-Atlantic,

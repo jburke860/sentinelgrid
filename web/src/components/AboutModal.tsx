@@ -1,6 +1,7 @@
 "use client";
 
 import { FLEET, REGIONS } from "@/lib/sim/fleet";
+import { MESH_COUNT } from "@/lib/sim/mesh";
 import { Kbd } from "./ui";
 
 function FlowBox({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
@@ -45,7 +46,8 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
           <p>
             SentinelGrid is a personal-project edge telemetry platform for climate-risk monitoring. This demo
             simulates the full system in your browser:{" "}
-            <strong className="text-ink">{FLEET.length} virtual sensor nodes</strong> across{" "}
+            <strong className="text-ink">{FLEET.length} flagship sensor nodes</strong> plus a{" "}
+            <strong className="text-ink">{MESH_COUNT.toLocaleString()}-node simulated mesh</strong> across{" "}
             <strong className="text-ink">{REGIONS.length} US regions</strong> stream readings every 30 simulated seconds, an
             anomaly model scores every reading, and sustained anomalies open incidents an operator can work.
           </p>

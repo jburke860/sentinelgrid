@@ -6,9 +6,12 @@ import { REGION_BY_ID } from "@/lib/sim/fleet";
 import type { DeviceView } from "@/lib/sim/types";
 import { EmptyState, Panel, RiskBadge, SignalBars, StatusDot, fmtTime } from "./ui";
 
+const ALL_TIER_CAP = 400;
+
 export function DeviceTable({
   accent,
   devices,
+  mesh,
   showRegion,
   selectedId,
   onSelect,
@@ -16,6 +19,7 @@ export function DeviceTable({
 }: {
   accent?: string;
   devices: DeviceView[];
+  mesh: DeviceView[];
   showRegion: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -23,8 +27,9 @@ export function DeviceTable({
 }) {
   const [query, setQuery] = useState("");
   const [issuesOnly, setIssuesOnly] = useState(false);
+  const [tier, setTier] = useState<"flagship" | "all">("flagship");
 
-  let filtered = devices;
+  let filtered = tier === "all" ? [...devices, ...mesh] : devices;
   const q = query.trim().toLowerCase();
   if (q) {
     filtered = filtered.filter(
@@ -42,7 +47,10 @@ export function DeviceTable({
         (d.latest?.flags.length ?? 0) > 0,
     );
   }
-  const sorted = [...filtered].sort((a, b) => (b.latest?.riskScore ?? -1) - (a.latest?.riskScore ?? -1));
+  const matched = filtered.length;
+  const sorted = [...filtered]
+    .sort((a, b) => (b.latest?.riskScore ?? -1) - (a.latest?.riskScore ?? -1))
+    .slice(0, tier === "all" ? ALL_TIER_CAP : filtered.length);
 
   return (
     <Panel
@@ -51,6 +59,19 @@ export function DeviceTable({
       accent={accent}
       right={
         <div className="flex items-center gap-1.5">
+          {mesh.length > 0 &&
+            (["flagship", "all"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTier(t)}
+                className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase transition-colors ${
+                  tier === t ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
+                }`}
+                title={t === "all" ? "Include the simulated mesh tier" : "Flagship stations only"}
+              >
+                {t}
+              </button>
+            ))}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -67,7 +88,7 @@ export function DeviceTable({
           >
             issues
           </button>
-          <span className="tnum font-mono text-[11px] text-ink-dim">{sorted.length}</span>
+          <span className="tnum font-mono text-[11px] text-ink-dim">{matched.toLocaleString()}</span>
         </div>
       }
     >
@@ -154,6 +175,11 @@ export function DeviceTable({
             ))}
           </tbody>
         </table>
+      )}
+      {tier === "all" && matched > sorted.length && (
+        <div className="border-t border-edge-soft px-3 py-1.5 text-center font-mono text-[10px] text-ink-dim">
+          showing top {ALL_TIER_CAP} of {matched.toLocaleString()} by risk — search to narrow
+        </div>
       )}
     </Panel>
   );
