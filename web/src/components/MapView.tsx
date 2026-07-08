@@ -617,8 +617,8 @@ function LayerRow({
       onClick={onToggle}
       title={title ?? `Toggle ${label}`}
       aria-pressed={on}
-      className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left font-mono text-[10px] transition-colors ${
-        on ? "text-ink" : "text-ink-dim/70 hover:text-ink-dim"
+      className={`flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left font-mono text-[10px] transition-colors lg:py-1 ${
+        on ? "text-ink" : "text-ink-dim hover:text-ink"
       }`}
     >
       {on ? <Eye size={12} className="text-accent" aria-hidden /> : <EyeOff size={12} aria-hidden />}
@@ -694,6 +694,8 @@ export default function MapView({
     setLayers((prev) => {
       const next = { ...prev, [id]: !prev[id] };
       localStorage.setItem("sg-map-layers", JSON.stringify(next));
+      // Mirror outward so the page can keep the shareable URL in sync.
+      window.dispatchEvent(new CustomEvent("sg-layers-changed", { detail: next }));
       return next;
     });
   };
@@ -716,6 +718,7 @@ export default function MapView({
       setLayers((prev) => {
         const next = { ...prev, ...detail };
         localStorage.setItem("sg-map-layers", JSON.stringify(next));
+        window.dispatchEvent(new CustomEvent("sg-layers-changed", { detail: next }));
         return next;
       });
     };
@@ -1087,7 +1090,7 @@ export default function MapView({
       {/* Fullscreen */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-2 right-2 z-[500] rounded-md border border-edge bg-panel/90 p-1.5 text-ink-dim shadow-lg transition-colors hover:text-ink"
+        className="absolute top-2 right-2 z-[500] rounded-md border border-edge bg-panel/90 p-2.5 text-ink-dim shadow-lg transition-colors hover:text-ink lg:p-1.5"
         title={fullscreen ? "Exit fullscreen" : "Fullscreen map"}
         aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen map"}
       >

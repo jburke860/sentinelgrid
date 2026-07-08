@@ -1,7 +1,8 @@
 "use client";
 
-import { Bookmark, Plus, X } from "lucide-react";
+import { Bookmark, Check, Link2, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { buildShareUrl } from "@/lib/urlState";
 
 interface SavedView {
   name: string;
@@ -47,7 +48,15 @@ export function SavedViews({
   const [custom, setCustom] = useState<SavedView[]>([]);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const copyLink = (v: SavedView) => {
+    void navigator.clipboard.writeText(buildShareUrl(v.regionId, v.layers)).then(() => {
+      setCopied(v.name);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  };
 
   useEffect(() => setCustom(loadCustom()), []);
   useEffect(() => {
@@ -121,6 +130,14 @@ export function SavedViews({
                   <span className="ml-1.5 font-mono text-[9px] text-ink-dim">
                     {v.regionId ?? "national"}
                   </span>
+                </button>
+                <button
+                  onClick={() => copyLink(v)}
+                  className="rounded p-1 text-ink-dim/50 opacity-0 transition-opacity group-hover:opacity-100 hover:text-accent"
+                  title={`Copy a shareable link for "${v.name}"`}
+                  aria-label={`Copy link for saved view ${v.name}`}
+                >
+                  {copied === v.name ? <Check size={11} className="text-ok" aria-hidden /> : <Link2 size={11} aria-hidden />}
                 </button>
                 {!isSeed && (
                   <button

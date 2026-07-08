@@ -222,6 +222,8 @@ export interface SimSnapshot {
   replay: boolean;
   liveAnchorAt: string | null;
   tick: number;
+  /** Wall-clock cost of the last engine step batch (ms) — perf overlay/CI. */
+  tickMs?: number;
   scenarios: ScenarioState[];
   storyline: StorylineState | null;
   regions: RegionView[];

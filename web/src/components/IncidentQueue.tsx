@@ -196,6 +196,8 @@ export function IncidentQueue({
   devices,
   now,
   frozen,
+  initialFilter,
+  onFilterChange,
   onSelectDevice,
 }: {
   accent?: string;
@@ -204,10 +206,21 @@ export function IncidentQueue({
   devices: DeviceView[];
   now: number;
   frozen: boolean;
+  /** Seed from the URL; changes are reported back for the shareable hash. */
+  initialFilter?: string;
+  onFilterChange?: (f: StatusFilter) => void;
   onSelectDevice: (id: string) => void;
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilterRaw] = useState<StatusFilter>(
+    initialFilter === "critical" || initialFilter === "warning" || initialFilter === "closed"
+      ? initialFilter
+      : "all",
+  );
+  const setStatusFilter = (f: StatusFilter) => {
+    setStatusFilterRaw(f);
+    onFilterChange?.(f);
+  };
   const [hazardFilter, setHazardFilter] = useState<HazardKind | "all">("all");
 
   const active = incidents.filter((i) => i.status !== "resolved" && i.status !== "dismissed");

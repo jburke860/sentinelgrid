@@ -128,6 +128,7 @@ export class SimEngine implements DataEngine {
   private incidentSeq = 0;
   private eventSeq = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private lastTickMs = 0;
   private listeners = new Set<() => void>();
   private snapshot: SimSnapshot;
   private readonly seed: number;
@@ -163,7 +164,9 @@ export class SimEngine implements DataEngine {
     if (this.timer) return;
     this.timer = setInterval(() => {
       if (!this.running) return;
+      const t0 = performance.now();
       for (let i = 0; i < this.speed; i++) this.step();
+      this.lastTickMs = performance.now() - t0;
       this.publish();
     }, TICK_REAL_MS);
   }
@@ -601,6 +604,7 @@ export class SimEngine implements DataEngine {
       replay: this.replay,
       liveAnchorAt: this.anchor?.fetchedAt ?? null,
       tick: this.tickCount,
+      tickMs: this.lastTickMs,
       scenarios: this.scenarios.map((s) => ({ ...s })),
       storyline: this.storyline
         ? {

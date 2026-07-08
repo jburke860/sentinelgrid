@@ -98,6 +98,31 @@ test("incidents view shows the rule-based situation summary", async ({ page }) =
   await expect(page.getByText("auto-generated · rule-based")).toBeVisible();
 });
 
+test("shareable URL restores view, theme, and region", async ({ page }) => {
+  await page.goto("/#r=gulf&v=analytics&th=dark");
+  await expect(page.getByText("Anomaly Fingerprint")).toBeVisible();
+  await expect(page.getByLabel("Region", { exact: true })).toHaveValue("gulf");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  // Navigating updates the hash for re-sharing.
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Incidents" }).click();
+  await expect(page).toHaveURL(/v=incidents/);
+});
+
+test("perf overlay reports healthy tick cost and bounded marker count", async ({ page }) => {
+  await page.goto("/#perf=1");
+  await expect(page.locator(".leaflet-container")).toBeVisible();
+  const overlay = page.getByTestId("perf-overlay");
+  await expect(overlay).toBeVisible();
+  // Wait for a real engine tick to be measured, then assert generous CI budgets.
+  await expect
+    .poll(async () => Number(await page.getByTestId("perf-tick").textContent()), { timeout: 15_000 })
+    .toBeGreaterThan(0);
+  const tickMs = Number(await page.getByTestId("perf-tick").textContent());
+  expect(tickMs).toBeLessThan(50);
+  const badges = Number(await page.getByTestId("perf-markers").textContent());
+  expect(badges).toBeLessThan(900); // culling keeps the DOM bounded
+});
+
 test("incident detail opens from the queue", async ({ page }) => {
   await page.goto("/");
   const incident = page.locator("li", { hasText: "INC-" }).first();

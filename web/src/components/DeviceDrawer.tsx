@@ -1,9 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
-import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  YAxis,
+} from "recharts";
+import { BASELINE_STD } from "@/lib/sim/baselines";
 import { REGION_BY_ID } from "@/lib/sim/fleet";
-import { HAZARDS } from "@/lib/sim/hazards";
+import { HAZARDS, hazardMatches } from "@/lib/sim/hazards";
 import type { DataEngine, DeviceView, Incident, Metric } from "@/lib/sim/types";
 import { METRIC_LABELS, METRIC_UNITS, METRICS } from "@/lib/sim/types";
 import { HazardIcon } from "./icons";
@@ -95,8 +106,11 @@ export function DeviceDrawer({
             <h2 className="truncate text-sm font-semibold text-ink">{device.displayName}</h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[10px] text-ink-dim">
               <span>{device.deviceId}</span>
+              {device.locality && <span>{device.locality}</span>}
               <span className="rounded bg-panel-2 px-1 text-accent/80">{region?.shortName}</span>
-              <span className="capitalize">{device.kind}</span>
+              <span className="rounded bg-panel-2 px-1 capitalize" title="Node siting — affects hazard sensitivity">
+                {device.kind}
+              </span>
               <span>fw {device.firmwareVersion}</span>
             </div>
           </div>
@@ -125,6 +139,90 @@ export function DeviceDrawer({
               <span className="inline-flex items-center gap-1.5 text-ink">
                 <HazardIcon kind={latest.topHazard} size={13} /> {HAZARDS[latest.topHazard].label}
               </span>
+            </div>
+          )}
+
+          {latest && (
+            <div className="grid grid-cols-2 items-center gap-2 rounded-lg border border-edge-soft bg-panel-2/40 p-2">
+              <div className="h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart
+                    data={METRICS.map((m) => {
+                      const c = latest.contributions.find((x) => x.metric === m);
+                      return { metric: METRIC_LABELS[m].slice(0, 5), z: c ? Math.min(6, Math.abs(c.z)) : 0 };
+                    })}
+                    margin={{ top: 8, right: 14, bottom: 4, left: 14 }}
+                  >
+                    <PolarGrid stroke="#94a3b840" />
+                    <PolarAngleAxis
+                      dataKey="metric"
+                      tick={{ fill: "var(--color-ink-dim)", fontSize: 8, fontFamily: "var(--font-jetbrains)" }}
+                    />
+                    <PolarRadiusAxis domain={[0, 6]} tick={false} axisLine={false} />
+                    <Radar
+                      dataKey="z"
+                      stroke="var(--color-accent)"
+                      fill="var(--color-accent)"
+                      fillOpacity={0.25}
+                      strokeWidth={1.25}
+                      isAnimationActive={false}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-1">
+                <div className="font-mono text-[9px] tracking-wider text-ink-dim uppercase">Pattern match</div>
+                {hazardMatches(latest.contributions)
+                  .slice(0, 3)
+                  .map((m) => (
+                    <div key={m.kind} className="flex items-center gap-1.5 text-[10px]">
+                      <HazardIcon kind={m.kind} size={11} />
+                      <span className="min-w-0 flex-1 truncate text-ink/85">{m.label}</span>
+                      <span className="tnum font-mono text-ink-dim">{m.match}%</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {latest && (
+            <div>
+              <div className="mb-1.5 font-mono text-[10px] tracking-widest text-ink-dim uppercase">
+                Observed vs model baseline
+              </div>
+              <table className="w-full font-mono text-[10px]">
+                <thead>
+                  <tr className="text-left text-ink-dim/80">
+                    <th className="py-0.5 font-medium">Metric</th>
+                    <th className="py-0.5 text-right font-medium">Observed</th>
+                    <th className="py-0.5 text-right font-medium">Baseline</th>
+                    <th className="py-0.5 text-right font-medium">Δσ</th>
+                  </tr>
+                </thead>
+                <tbody className="tnum">
+                  {latest.contributions.map((c) => (
+                    <tr key={c.metric} className={`border-t border-edge-soft/60 ${c.quarantined ? "opacity-50" : ""}`}>
+                      <td className="py-0.5 text-ink-dim">
+                        {METRIC_LABELS[c.metric]}
+                        {c.quarantined && <span className="ml-1 text-watch">Q</span>}
+                      </td>
+                      <td className="py-0.5 text-right text-ink">
+                        {c.value.toFixed(1)} {METRIC_UNITS[c.metric]}
+                      </td>
+                      <td className="py-0.5 text-right text-ink-dim">
+                        {(c.value - c.z * BASELINE_STD[c.metric]).toFixed(1)}
+                      </td>
+                      <td
+                        className="py-0.5 text-right"
+                        style={{ color: Math.abs(c.z) >= 3 && !c.quarantined ? "var(--color-warn)" : "var(--color-ink-dim)" }}
+                      >
+                        {c.z >= 0 ? "+" : ""}
+                        {c.z.toFixed(1)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 

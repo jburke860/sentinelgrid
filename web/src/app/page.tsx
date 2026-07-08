@@ -14,6 +14,7 @@ import { ForecastPanel } from "@/components/ForecastPanel";
 import { IncidentQueue } from "@/components/IncidentQueue";
 import { ModelConfidence } from "@/components/ModelConfidence";
 import { KpiStrip, type KpiPoint } from "@/components/KpiStrip";
+import { PerfOverlay } from "@/components/PerfOverlay";
 import { PrintReport } from "@/components/PrintReport";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SituationSummary } from "@/components/SituationSummary";
@@ -64,6 +65,9 @@ function chime() {
 function Dashboard({ engine }: { engine: DataEngine }) {
   const snap = useSim(engine);
   const feeds = useFeeds();
+  // Snapshot the hash before the URL-writing effect can rewrite it — later
+  // effects (e.g. theme init) must see what the shared link actually said.
+  const initialUrl = useRef(readUrlState());
   const [regionId, setRegionId] = useState<string | null>(() => readUrlState().regionId);
   const [selectedId, setSelectedId] = useState<string | null>(() => readUrlState().deviceId);
   const [viewTime, setViewTime] = useState<number | null>(null);
@@ -73,8 +77,44 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [alertsOn, setAlertsOn] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>(() => {
+    const v = readUrlState().view;
+    return v === "incidents" || v === "nodes" || v === "analytics" ? v : "overview";
+  });
+  const [severityFilter, setSeverityFilter] = useState<string>(() => readUrlState().severity ?? "all");
+  // Map layers are owned by MapView (localStorage); the page mirrors them for
+  // the URL. A `ly=` param in the hash seeds localStorage before MapView mounts.
+  const [urlLayers, setUrlLayers] = useState<string[] | null>(() => {
+    const fromUrl = readUrlState().layers;
+    if (fromUrl && typeof window !== "undefined") {
+      try {
+        const stored = JSON.parse(localStorage.getItem("sg-map-layers") ?? "{}") as Record<string, boolean>;
+        const next: Record<string, boolean> = { ...stored };
+        const all = ["risk", "temperature", "air", "wind", "water", "radar", "incidents", "epicenters", "arcs", "stations", "alerts", "quakes"];
+        for (const k of all) next[k] = fromUrl.includes(k);
+        localStorage.setItem("sg-map-layers", JSON.stringify(next));
+      } catch {
+        // unreadable storage — MapView falls back to defaults
+      }
+    }
+    return fromUrl;
+  });
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const layers = (e as CustomEvent).detail as Record<string, boolean>;
+      setUrlLayers(
+        Object.entries(layers)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+      );
+    };
+    window.addEventListener("sg-layers-changed", onChange);
+    return () => window.removeEventListener("sg-layers-changed", onChange);
+  }, []);
   const bootAt = useRef(Date.now());
+  const [showPerf] = useState(
+    () => typeof window !== "undefined" && window.location.hash.includes("perf=1"),
+  );
 
   // Short ring buffer of fleet KPIs so the header strip can show trends.
   const kpiHistory = useRef<KpiPoint[]>([]);
@@ -91,12 +131,16 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   }, [snap]);
 
   useEffect(() => {
-    writeUrlState({ regionId, deviceId: selectedId });
-  }, [regionId, selectedId]);
+    writeUrlState({ regionId, deviceId: selectedId, view, theme, layers: urlLayers, severity: severityFilter });
+  }, [regionId, selectedId, view, theme, urlLayers, severityFilter]);
 
   useEffect(() => {
     setAlertsOn(localStorage.getItem("sg-alerts") === "1");
-    if (localStorage.getItem("sg-theme") === "dark") setTheme("dark");
+    // URL theme wins over the stored preference (shared links look identical).
+    const urlTheme = initialUrl.current.theme;
+    if (urlTheme === "dark" || (urlTheme !== "light" && localStorage.getItem("sg-theme") === "dark")) {
+      setTheme("dark");
+    }
   }, []);
 
   useEffect(() => {
@@ -144,6 +188,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
   // Alert on newly-critical incidents (skip the backlog present at mount).
   const seenCritical = useRef<Set<number> | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   useEffect(() => {
     const crits = snap.incidents.filter(
       (i) => i.severity === "critical" && i.status !== "resolved" && i.status !== "dismissed",
@@ -154,6 +199,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     }
     const fresh = crits.filter((i) => !seenCritical.current!.has(i.id));
     for (const i of fresh) seenCritical.current!.add(i.id);
+    if (fresh.length > 0) setAnnouncement(`Critical incident: ${fresh[0].title}`);
     if (alertsOn && fresh.length > 0) {
       chime();
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
@@ -248,31 +294,31 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const LAYOUTS: Record<View, Record<string, string>> = {
     overview: {
       map: "flex lg:col-span-8 lg:row-span-4",
-      incidents: "hidden lg:flex lg:col-span-4 lg:row-span-4",
-      devices: "hidden lg:flex lg:col-span-4 lg:row-span-2",
-      telemetry: "hidden lg:flex lg:col-span-4 lg:row-span-2",
-      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-2",
+      incidents: "flex lg:col-span-4 lg:row-span-4",
+      devices: "flex lg:col-span-4 lg:row-span-2",
+      telemetry: "flex lg:col-span-4 lg:row-span-2",
+      anomaly: "flex lg:col-span-4 lg:row-span-2",
     },
     incidents: {
       map: "hidden",
       incidents: "flex lg:col-span-8 lg:row-span-6",
       devices: "hidden",
       telemetry: "hidden",
-      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-3",
+      anomaly: "flex lg:col-span-4 lg:row-span-3",
     },
     nodes: {
       map: "hidden",
       incidents: "hidden",
       devices: "flex lg:col-span-8 lg:row-span-6",
-      telemetry: "hidden lg:flex lg:col-span-4 lg:row-span-3",
-      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-3",
+      telemetry: "flex lg:col-span-4 lg:row-span-3",
+      anomaly: "flex lg:col-span-4 lg:row-span-3",
     },
     analytics: {
       map: "hidden",
       incidents: "hidden",
       devices: "hidden",
       telemetry: "flex lg:col-span-7 lg:row-span-3",
-      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-3",
+      anomaly: "flex lg:col-span-4 lg:row-span-3",
     },
   };
   const panelClass = (panel: string) => LAYOUTS[view][panel];
@@ -314,6 +360,16 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   return (
     <>
     <div className="flex h-dvh min-h-0 flex-col print:hidden">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[2000] focus:rounded-md focus:bg-accent focus:px-3 focus:py-1.5 focus:text-xs focus:text-white"
+      >
+        Skip to content
+      </a>
+      {/* Screen-reader announcement for new critical incidents. */}
+      <div role="status" aria-live="assertive" className="sr-only">
+        {announcement}
+      </div>
       <header className="shrink-0">
         <TopBar
           engine={engine}
@@ -358,7 +414,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       ) : (
       <div className="flex min-h-0 flex-1">
       <SideRail view={view} onChange={setView} openIncidents={openCount} onOpenAbout={() => setAboutOpen(true)} />
-      <main className="grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-2 overflow-hidden p-2 lg:grid-cols-12 lg:grid-rows-6">
+      <main id="main" className="grid min-h-0 flex-1 auto-rows-[minmax(20rem,auto)] grid-cols-1 gap-2 overflow-y-auto p-2 lg:auto-rows-fr lg:grid-cols-12 lg:grid-rows-6 lg:overflow-hidden">
         <div className={`${panelClass("map")} min-h-0`}>
           <ErrorBoundary label="Map">
             <Panel
@@ -403,6 +459,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
               devices={viewData.devices}
               now={frozen ? viewTime! : snap.simTime}
               frozen={frozen}
+              initialFilter={severityFilter}
+              onFilterChange={setSeverityFilter}
               onSelectDevice={inspectDevice}
             />
           </ErrorBoundary>
@@ -444,7 +502,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         )}
 
         {view === "incidents" && (
-          <div className="hidden min-h-0 lg:flex lg:col-span-4 lg:row-span-3">
+          <div className="flex min-h-0 lg:col-span-4 lg:row-span-3">
             <ErrorBoundary label="Situation summary">
               <SituationSummary
                 accent="#8b5cf6"
@@ -464,12 +522,12 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
         {view === "analytics" && (
           <>
-            <div className="hidden min-h-0 lg:flex lg:col-span-4 lg:row-span-3">
+            <div className="flex min-h-0 lg:col-span-4 lg:row-span-3">
               <ErrorBoundary label="Forecast outlook">
                 <ForecastPanel accent="#0ea5e9" snap={snap} device={fingerprintDevice} />
               </ErrorBoundary>
             </div>
-            <div className="hidden min-h-0 lg:flex lg:col-span-4 lg:row-span-3">
+            <div className="flex min-h-0 lg:col-span-4 lg:row-span-3">
               <ErrorBoundary label="Model confidence">
                 <ModelConfidence accent="#10b981" snap={snap} />
               </ErrorBoundary>
@@ -544,6 +602,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       {helpOpen && <ShortcutsModal onClose={() => setHelpOpen(false)} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+      {showPerf && <PerfOverlay snap={snap} />}
     </div>
     <PrintReport snap={snap} />
     </>
