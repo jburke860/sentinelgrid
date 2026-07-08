@@ -23,6 +23,7 @@ import { TimeScrubber } from "@/components/TimeScrubber";
 import { TopBar } from "@/components/TopBar";
 import { Panel, fmtDuration } from "@/components/ui";
 import { LiveEngine } from "@/lib/liveClient";
+import { useFeeds } from "@/lib/liveFeeds";
 import { SimEngine } from "@/lib/sim/engine";
 import { FLEET, REGIONS } from "@/lib/sim/fleet";
 import type { DataEngine, LiveAnchor } from "@/lib/sim/types";
@@ -62,6 +63,7 @@ function chime() {
 
 function Dashboard({ engine }: { engine: DataEngine }) {
   const snap = useSim(engine);
+  const feeds = useFeeds();
   const [regionId, setRegionId] = useState<string | null>(() => readUrlState().regionId);
   const [selectedId, setSelectedId] = useState<string | null>(() => readUrlState().deviceId);
   const [viewTime, setViewTime] = useState<number | null>(null);
@@ -378,6 +380,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
                 theme={theme}
                 devices={viewData.devices}
                 mesh={frozen ? [] : snap.mesh}
+                feeds={feeds}
                 incidents={viewData.incidents}
                 regions={snap.regions}
                 scenarios={frozen ? [] : snap.scenarios}
@@ -485,6 +488,19 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           {snap.replay && snap.liveAnchorAt
             ? `NWS · USGS anchors ${snap.liveAnchorAt.slice(0, 10)}`
             : "synthetic baselines"}
+        </span>
+        <span
+          className="tnum inline-flex items-center gap-1.5"
+          title="Real-data feeds: verified stations snapshot, NWS active warnings, USGS earthquakes"
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${feeds.stationsAt ? "bg-ok" : "bg-edge"}`} />
+          {feeds.stationsAt
+            ? `${feeds.stations.length.toLocaleString()} live stations ${fmtDuration(Date.now() - feeds.stationsAt)} old`
+            : "stations feed —"}
+          {feeds.alertsAt !== null && (
+            <> · {feeds.alerts.length} warnings{feeds.alertsZonal > 0 ? ` (+${feeds.alertsZonal} zonal)` : ""}</>
+          )}
+          {feeds.quakesAt !== null && <> · {feeds.quakes.length} quakes</>}
         </span>
         <span className="tnum" title="Telemetry throughput at the current speed">
           {readingsPerMin.toLocaleString()} readings/min

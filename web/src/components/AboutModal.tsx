@@ -89,6 +89,10 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
                 refreshed daily by CI
               </li>
               <li>
+                <span className="text-ink">Real live layers</span> — ~3,700 verified NWS/USGS stations, live NEXRAD
+                radar, active warning polygons, and earthquakes (LIVE-badged; simulated overlays stay dashed)
+              </li>
+              <li>
                 <span className="text-ink">Sensor drift</span> — watch a quarantined metric get excluded from hazard
                 scoring in the anomaly panel
               </li>

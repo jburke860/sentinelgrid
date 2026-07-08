@@ -5,9 +5,11 @@ import L from "leaflet";
 import "leaflet.heat";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Layers, Maximize, Minimize } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import type { FeedState, Station } from "@/lib/liveFeeds";
 import { HAZARD_HUES } from "./icons";
 import type { DeviceView, Incident, RegionView, ScenarioState } from "@/lib/sim/types";
+import { METRIC_UNITS } from "@/lib/sim/types";
 import { RISK_COLORS, RiskBadge, StatusDot, fmtTime } from "./ui";
 
 const NATIONAL_CENTER: [number, number] = [38.5, -97];
@@ -38,6 +40,9 @@ interface LayerState {
   incidents: boolean;
   epicenters: boolean;
   arcs: boolean;
+  stations: boolean;
+  alerts: boolean;
+  quakes: boolean;
 }
 
 const DEFAULT_LAYERS: LayerState = {
@@ -50,6 +55,9 @@ const DEFAULT_LAYERS: LayerState = {
   incidents: true,
   epicenters: true,
   arcs: true,
+  stations: true,
+  alerts: true,
+  quakes: true,
 };
 
 type Basemap = "auto" | "satellite";
@@ -304,6 +312,85 @@ function MeshDots({ nodes, onSelect }: { nodes: DeviceView[]; onSelect: (id: str
   return null;
 }
 
+/**
+ * Verified stations: real NWS/ASOS + USGS observations as hollow rings —
+ * visually distinct from the filled simulated tiers. Same canvas-pool
+ * strategy as MeshDots.
+ */
+const STATION_CAP = 900;
+
+function stationTooltip(s: Station): string {
+  const parts: string[] = [];
+  for (const [m, v] of Object.entries(s.obs)) {
+    parts.push(`${m.split("_")[0]} ${v} ${METRIC_UNITS[m as keyof typeof METRIC_UNITS]}`);
+  }
+  const age = Math.round((Date.now() - s.t) / 60_000);
+  return `<b>${s.name}, ${s.st}</b> · LIVE ${s.kind === "wx" ? "NWS/ASOS" : "USGS gauge"}<br>${parts.join(" · ")}<br>observed ${age}m ago${s.risk !== null ? ` · anomaly ${s.risk}` : ""}`;
+}
+
+function StationDots({ stations }: { stations: Station[] }) {
+  const map = useMap();
+  const poolRef = useRef(new Map<string, L.CircleMarker>());
+  const rendererRef = useRef<L.Canvas | null>(null);
+  if (!rendererRef.current) rendererRef.current = L.canvas({ padding: 0.2 });
+  const latest = useRef(stations);
+  latest.current = stations;
+
+  const redraw = () => {
+    const bounds = map.getBounds().pad(0.1);
+    const zoom = map.getZoom();
+    const radius = zoom >= DETAIL_ZOOM ? 4.5 : 3;
+    const inView = latest.current.filter((s) => bounds.contains([s.lat, s.lon]));
+    if (inView.length > STATION_CAP) {
+      inView.sort((a, b) => (b.risk ?? -1) - (a.risk ?? -1));
+      inView.length = STATION_CAP;
+    }
+    const pool = poolRef.current;
+    const keep = new Set<string>();
+    for (const s of inView) {
+      keep.add(s.id);
+      const color = s.risk !== null && s.risk >= 25 ? RISK_COLORS[s.level] : s.kind === "wx" ? "#64d3e8" : "#5b8dd6";
+      let marker = pool.get(s.id);
+      if (!marker) {
+        marker = L.circleMarker([s.lat, s.lon], {
+          renderer: rendererRef.current!,
+          radius,
+          weight: 1.5,
+          color,
+          fill: true,
+          fillOpacity: 0.08,
+        });
+        marker.bindTooltip(() => stationTooltip(latest.current.find((x) => x.id === s.id) ?? s));
+        marker.addTo(map);
+        pool.set(s.id, marker);
+      } else {
+        marker.setStyle({ color, radius });
+      }
+    }
+    for (const [id, marker] of pool) {
+      if (!keep.has(id)) {
+        marker.remove();
+        pool.delete(id);
+      }
+    }
+  };
+
+  useMapEvents({ moveend: () => redraw(), zoomend: () => redraw() });
+  useEffect(() => {
+    redraw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stations]);
+  useEffect(
+    () => () => {
+      for (const marker of poolRef.current.values()) marker.remove();
+      poolRef.current.clear();
+    },
+     
+    [],
+  );
+  return null;
+}
+
 /** Imperial+metric scale bar in the bottom-left corner. */
 function ScaleBar() {
   const map = useMap();
@@ -377,12 +464,14 @@ function LayerRow({
   on,
   onToggle,
   title,
+  live = false,
 }: {
   label: string;
   swatch: string;
   on: boolean;
   onToggle: () => void;
   title?: string;
+  live?: boolean;
 }) {
   return (
     <button
@@ -395,7 +484,10 @@ function LayerRow({
     >
       {on ? <Eye size={12} className="text-accent" aria-hidden /> : <EyeOff size={12} aria-hidden />}
       <span className="h-2 w-2 rounded-full" style={{ background: swatch, opacity: on ? 1 : 0.35 }} />
-      {label}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {live && (
+        <span className="rounded bg-ok/15 px-1 text-[8px] font-bold tracking-wider text-ok">LIVE</span>
+      )}
     </button>
   );
 }
@@ -406,6 +498,7 @@ export default function MapView({
   theme,
   devices,
   mesh,
+  feeds,
   incidents,
   regions,
   scenarios,
@@ -418,6 +511,7 @@ export default function MapView({
   theme: "light" | "dark";
   devices: DeviceView[];
   mesh: DeviceView[];
+  feeds: FeedState;
   incidents: Incident[];
   regions: RegionView[];
   scenarios: ScenarioState[];
@@ -603,6 +697,50 @@ export default function MapView({
           <HeatLayer key={cfg.id} points={metricPoints[cfg.id] ?? []} gradient={cfg.gradient} />
         ))}
 
+        {/* Real-data layers: solid + LIVE-badged, never blended with sim. */}
+        {layers.alerts && feeds.alerts.length > 0 && (
+          <GeoJSON
+            key={`alerts-${feeds.alertsAt}`}
+            data={
+              {
+                type: "FeatureCollection",
+                features: feeds.alerts.map((a) => ({
+                  type: "Feature" as const,
+                  geometry: a.geometry,
+                  properties: { color: a.color, event: a.event, headline: a.headline, severity: a.severity },
+                })),
+              } as GeoJSON.FeatureCollection
+            }
+            style={(f) => ({
+              color: f?.properties.color ?? "#94a3b8",
+              weight: 1.5,
+              fillColor: f?.properties.color ?? "#94a3b8",
+              fillOpacity: 0.14,
+            })}
+            onEachFeature={(f, layer) => {
+              layer.bindPopup(
+                `<b>${f.properties.event}</b> · LIVE NWS<br>${f.properties.headline ?? ""}`,
+              );
+            }}
+          />
+        )}
+        {layers.quakes &&
+          feeds.quakes.map((q) => (
+            <CircleMarker
+              key={q.id}
+              center={[q.lat, q.lon]}
+              radius={3 + q.mag * 1.8}
+              pathOptions={{ color: "#c2703e", weight: 2, fillColor: "#c2703e", fillOpacity: 0.25 }}
+            >
+              <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+                <span className="font-mono text-xs">
+                  M{q.mag.toFixed(1)} · {q.place} · LIVE USGS
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          ))}
+        {layers.stations && <StationDots stations={feeds.stations} />}
+
         {/* Mesh tier: culled canvas dots under the flagship badges. */}
         <MeshDots nodes={mesh} onSelect={onSelect} />
         {selectedMesh?.latest && (
@@ -769,6 +907,7 @@ export default function MapView({
             <LayerRow
               label="Weather radar"
               swatch="#22c55e"
+              live
               on={layers.radar}
               onToggle={() => toggleLayer("radar")}
               title="Live NEXRAD reflectivity (Iowa Environmental Mesonet)"
@@ -776,6 +915,31 @@ export default function MapView({
             <LayerRow label="Incident rings" swatch={RISK_COLORS.critical} on={layers.incidents} onToggle={() => toggleLayer("incidents")} />
             <LayerRow label="Storm centers" swatch="#8b5cf6" on={layers.epicenters} onToggle={() => toggleLayer("epicenters")} />
             <LayerRow label="Correlation arcs" swatch="#64748b" on={layers.arcs} onToggle={() => toggleLayer("arcs")} />
+            <div className="mx-1.5 my-1 border-t border-edge-soft" />
+            <LayerRow
+              label="Verified stations"
+              swatch="#64d3e8"
+              live
+              on={layers.stations}
+              onToggle={() => toggleLayer("stations")}
+              title="Real NWS/ASOS + USGS observations (baked snapshot, refreshed by CI)"
+            />
+            <LayerRow
+              label="NWS warnings"
+              swatch="#ef4444"
+              live
+              on={layers.alerts}
+              onToggle={() => toggleLayer("alerts")}
+              title="Live storm-based warning polygons from api.weather.gov"
+            />
+            <LayerRow
+              label="Earthquakes"
+              swatch="#c2703e"
+              live
+              on={layers.quakes}
+              onToggle={() => toggleLayer("quakes")}
+              title="Live USGS earthquakes, past day M2.5+"
+            />
             <div className="mt-1 flex items-center gap-1 border-t border-edge-soft px-1.5 pt-1.5">
               <span className="font-mono text-[9px] tracking-wider text-ink-dim uppercase">Base</span>
               {(["auto", "satellite"] as const).map((b) => (
