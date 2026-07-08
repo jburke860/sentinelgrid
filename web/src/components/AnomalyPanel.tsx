@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { DeviceView, LogEvent } from "@/lib/sim/types";
 import { METRIC_LABELS, METRIC_UNITS } from "@/lib/sim/types";
-import { TriangleAlert } from "lucide-react";
+import { Gauge, TriangleAlert } from "lucide-react";
 import { Panel, RISK_COLORS, RiskBadge, fmtTime } from "./ui";
 
 const EVENT_COLORS: Record<LogEvent["kind"], string> = {
@@ -29,6 +29,7 @@ export function AnomalyPanel({
   return (
     <Panel
       title={tab === "anomaly" ? "Anomaly Detail" : "Activity Feed"}
+      icon={Gauge}
       accent={accent}
       right={
         <div className="flex gap-1 font-mono text-[10px]">

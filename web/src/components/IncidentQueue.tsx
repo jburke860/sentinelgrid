@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { Minus, Siren, TrendingDown, TrendingUp } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
@@ -244,6 +244,7 @@ export function IncidentQueue({
   return (
     <Panel
       title="Incident Queue"
+      icon={Siren}
       accent={accent}
       right={
         <div className="flex items-center gap-1 font-mono text-[10px]">

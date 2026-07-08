@@ -1,5 +1,6 @@
 "use client";
 
+import { ChartSpline } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Area,
@@ -121,6 +122,7 @@ export function TelemetryChart({
   return (
     <Panel
       title={`Telemetry — ${deviceName ?? "select a node"}`}
+      icon={ChartSpline}
       accent={accent}
       right={
         <div className="flex flex-wrap items-center justify-end gap-1">

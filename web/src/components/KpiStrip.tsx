@@ -1,9 +1,31 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { HazardKind, SimSnapshot } from "@/lib/sim/types";
 import { HAZARDS } from "@/lib/sim/hazards";
 import { HAZARD_HUES, HazardIcon } from "./icons";
 import { Sparkline, fmtClock } from "./ui";
+
+/** Eases a displayed integer toward its target — the mock-style count-up. */
+function CountUp({ value }: { value: number }) {
+  const [display, setDisplay] = useState(value);
+  const prev = useRef(value);
+  useEffect(() => {
+    const from = prev.current;
+    prev.current = value;
+    if (from === value) return;
+    const start = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / 350);
+      setDisplay(Math.round(from + (value - from) * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{display}</>;
+}
 
 /** One KPI sample per engine tick, kept in a short ring buffer by the page. */
 export interface KpiPoint {
@@ -72,7 +94,9 @@ export function KpiStrip({
         label="Active nodes"
         value={
           <>
-            <span className="text-ok">{online}</span>
+            <span className="text-ok">
+              <CountUp value={online} />
+            </span>
             <span className="opacity-50">/{snap.devices.length}</span>
           </>
         }
@@ -81,15 +105,15 @@ export function KpiStrip({
       />
       <KpiCard
         label="Open incidents"
-        value={open}
-        tone={open > 0 ? "text-crit" : "text-ok"}
+        value={<CountUp value={open} />}
+        tone={open > 0 ? "text-crit glow-crit" : "text-ok"}
         spark={history.map((h) => h.open)}
         sparkColor={open > 0 ? "var(--color-crit)" : "var(--color-ok)"}
       />
       <KpiCard
         label="Peak risk"
-        value={peak}
-        tone={peakTone}
+        value={<CountUp value={peak} />}
+        tone={peak >= 75 ? `${peakTone} glow-crit` : peakTone}
         spark={history.map((h) => h.peak)}
         sparkColor="var(--color-watch)"
       />

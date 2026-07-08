@@ -1,5 +1,6 @@
 "use client";
 
+import { Fingerprint } from "lucide-react";
 import { useMemo } from "react";
 import {
   PolarAngleAxis,
@@ -52,6 +53,7 @@ export function FingerprintPanel({
   return (
     <Panel
       title="Anomaly Fingerprint"
+      icon={Fingerprint}
       accent={accent}
       right={
         device ? (

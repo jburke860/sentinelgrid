@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, RadioTower } from "lucide-react";
 import { useState } from "react";
 import { REGION_BY_ID } from "@/lib/sim/fleet";
 import type { DeviceView } from "@/lib/sim/types";
@@ -47,6 +47,7 @@ export function DeviceTable({
   return (
     <Panel
       title="Device Health"
+      icon={RadioTower}
       accent={accent}
       right={
         <div className="flex items-center gap-1.5">

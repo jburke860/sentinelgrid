@@ -1,5 +1,6 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import type { DeviceStatus, IncidentSeverity, IncidentStatus, RiskLevel } from "@/lib/sim/types";
 
 // Mid-tone accents chosen to stay legible on both the light and dark themes.
@@ -63,7 +64,15 @@ export function Sparkline({
     .join(" ");
   return (
     <svg width={width} height={height} aria-hidden className="shrink-0">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+      <polyline
+        points={pts}
+        pathLength={1}
+        className="spark-draw"
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -90,7 +99,9 @@ export function SignalBars({ rssi }: { rssi: number }) {
 export function RiskBadge({ level, score }: { level: RiskLevel; score?: number }) {
   return (
     <span
-      className="tnum inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase"
+      className={`tnum inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase ${
+        level === "critical" ? "glow-crit" : ""
+      }`}
       style={{ color: RISK_COLORS[level], background: `${RISK_COLORS[level]}21` }}
     >
       {level}
@@ -103,7 +114,9 @@ export function SeverityBadge({ severity }: { severity: IncidentSeverity }) {
   const color = RISK_COLORS[severity];
   return (
     <span
-      className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase"
+      className={`rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase ${
+        severity === "critical" ? "glow-crit" : ""
+      }`}
       style={{ color, background: `${color}21` }}
     >
       {severity}
@@ -157,7 +170,7 @@ export function CtrlButton({
       title={title}
       aria-label={label ?? title}
       aria-pressed={active}
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[11px] transition-all active:scale-95 ${
         active
           ? "border-accent/60 bg-accent/15 text-accent"
           : "border-edge bg-panel-2 text-ink-dim hover:border-accent/40 hover:text-ink"
@@ -187,6 +200,7 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
 export function Panel({
   title,
   accent,
+  icon: Icon,
   right,
   children,
   className = "",
@@ -194,18 +208,21 @@ export function Panel({
   title: string;
   /** Colored identity for the panel: top border + title dot. */
   accent?: string;
+  /** Eyebrow icon rendered beside the title. */
+  icon?: LucideIcon;
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section
-      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-soft bg-panel shadow-[0_1px_3px_rgba(11,26,48,0.08)] ${className}`}
+      className={`sg-panel fade-up flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-soft bg-panel shadow-[0_1px_3px_rgba(11,26,48,0.08)] ${className}`}
       style={accent ? { borderTop: `2px solid ${accent}` } : undefined}
     >
-      <header className="flex min-h-9 shrink-0 items-center justify-between gap-2 border-b border-edge-soft bg-panel-2/60 px-3 py-1.5">
-        <h2 className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[11px] font-semibold tracking-widest text-ink-dim uppercase">
+      <header className="flex min-h-8 shrink-0 items-center justify-between gap-2 border-b border-edge-soft bg-panel-2/60 px-3 py-1">
+        <h2 className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[10.5px] font-semibold tracking-widest text-ink-dim uppercase">
           {accent && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: accent }} />}
+          {Icon && <Icon size={12} className="shrink-0 opacity-80" style={accent ? { color: accent } : undefined} aria-hidden />}
           <span className="truncate">{title}</span>
         </h2>
         {right && <div className="flex shrink-0 items-center gap-1">{right}</div>}

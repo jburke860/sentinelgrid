@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, TrendingDown, TrendingUp } from "lucide-react";
+import { CircleCheck, ScrollText, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { REGION_BY_ID } from "@/lib/sim/fleet";
 import { HAZARDS } from "@/lib/sim/hazards";
@@ -129,6 +129,7 @@ export function SituationSummary({
   return (
     <Panel
       title="Situation Summary"
+      icon={ScrollText}
       accent={accent}
       right={
         <span className="rounded bg-panel-2 px-1.5 py-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">

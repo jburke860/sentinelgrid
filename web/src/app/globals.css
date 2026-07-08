@@ -21,11 +21,12 @@
 }
 
 :root[data-theme="dark"] {
-  --color-bg: #0a1220;
-  --color-panel: #101b2b;
-  --color-panel-2: #1a2739;
-  --color-edge: #263850;
-  --color-edge-soft: #1e2e43;
+  /* Deeper navy, closer to the ops-center concept mocks. */
+  --color-bg: #060c17;
+  --color-panel: #0c1626;
+  --color-panel-2: #152238;
+  --color-edge: #223550;
+  --color-edge-soft: #192a41;
   --color-ink: #dfe8f3;
   --color-ink-dim: #8598ae;
   --color-brand: #e8f1fa;
@@ -41,6 +42,21 @@ body {
   height: 100%;
   background: var(--color-bg);
   color: var(--color-ink);
+  /* Numbers line up everywhere without opting in per element. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glassy panel treatment in dark mode: faint top highlight + deep shadow. */
+:root[data-theme="dark"] .sg-panel {
+  background: linear-gradient(180deg, #101d33 0%, var(--color-panel) 55%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 10px 28px rgba(0, 0, 0, 0.38);
+}
+
+/* Critical states get a soft neon glow on dark. */
+:root[data-theme="dark"] .glow-crit {
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-crit) 55%, transparent);
 }
 
 ::selection {
@@ -225,4 +241,17 @@ input[type="range"].scrubber::-moz-range-thumb {
 
 .slide-in-right {
   animation: slide-in-right 0.2s ease-out;
+}
+
+/* Sparklines draw themselves in on mount. */
+@keyframes spark-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.spark-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: spark-draw 0.7s ease-out forwards;
 }

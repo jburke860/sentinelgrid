@@ -1,5 +1,6 @@
 "use client";
 
+import { ShieldCheck } from "lucide-react";
 import type { SimSnapshot } from "@/lib/sim/types";
 import { Panel, fmtTime } from "./ui";
 
@@ -58,7 +59,8 @@ export function ModelConfidence({ accent, snap }: { accent?: string; snap: SimSn
   const tone = overall >= 85 ? "var(--color-ok)" : overall >= 70 ? "var(--color-watch)" : "var(--color-warn)";
 
   return (
-    <Panel title="Model Confidence" accent={accent}>
+    <Panel title="Model Confidence"
+      icon={ShieldCheck} accent={accent}>
       <div className="flex h-full items-center gap-4 p-3">
         <div className="shrink-0 text-center">
           <div className="tnum font-mono text-3xl font-bold" style={{ color: tone }}>

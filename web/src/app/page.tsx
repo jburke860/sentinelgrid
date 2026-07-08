@@ -1,5 +1,6 @@
 "use client";
 
+import { Map as MapIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AboutModal } from "@/components/AboutModal";
@@ -342,6 +343,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           <ErrorBoundary label="Map">
             <Panel
               title={`Live Fleet Map — ${regionName}${frozen ? " (playback)" : ""}`}
+              icon={MapIcon}
               accent="#06b6d4"
               right={
                 regionId ? (

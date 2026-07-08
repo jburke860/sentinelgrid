@@ -1,5 +1,6 @@
 "use client";
 
+import { CloudSun } from "lucide-react";
 import { useMemo } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BASELINE_STD, expectedValues } from "@/lib/sim/baselines";
@@ -108,6 +109,7 @@ export function ForecastPanel({
   return (
     <Panel
       title="Forecast Outlook"
+      icon={CloudSun}
       accent={accent}
       right={
         <span className="rounded bg-panel-2 px-1.5 py-0.5 font-mono text-[9px] tracking-wider text-ink-dim uppercase">
