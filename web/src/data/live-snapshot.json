@@ -1,102 +1,102 @@
 {
-  "fetchedAt": "2026-07-13T08:57:52.482Z",
+  "fetchedAt": "2026-07-14T07:53:02.642Z",
   "regions": {
     "socal": {
-      "temperature_c": 21,
-      "humidity_pct": 82.99,
-      "wind_speed_mps": 2.57,
-      "water_level_m": 0.23
+      "temperature_c": 20,
+      "humidity_pct": 88.27,
+      "wind_speed_mps": 3.6,
+      "water_level_m": 0.22
     },
     "norcal": {
-      "temperature_c": 16,
-      "humidity_pct": 77.16
+      "temperature_c": 17,
+      "humidity_pct": 77.31
     },
     "pnw": {
-      "temperature_c": 14,
-      "humidity_pct": 62.72,
-      "wind_speed_mps": 3.6,
-      "water_level_m": 0.91
+      "temperature_c": 16,
+      "humidity_pct": 51.48,
+      "wind_speed_mps": 3.09,
+      "water_level_m": 0.9
     },
     "southwest": {
-      "temperature_c": 29,
-      "humidity_pct": 62.06,
-      "wind_speed_mps": 5.14
+      "temperature_c": 27,
+      "humidity_pct": 78.78,
+      "wind_speed_mps": 2.06
     },
     "mountainwest": {
       "temperature_c": 28,
-      "wind_speed_mps": 4.12
+      "humidity_pct": 28.39,
+      "wind_speed_mps": 2.06
     },
     "northrockies": {
-      "temperature_c": 27,
-      "humidity_pct": 30.1,
-      "wind_speed_mps": 3.6
+      "temperature_c": 25,
+      "humidity_pct": 36.26,
+      "wind_speed_mps": 3.09
     },
     "appalachia": {
       "temperature_c": 19,
       "humidity_pct": 100,
-      "wind_speed_mps": 0
+      "wind_speed_mps": 1.54
     },
     "newengland": {
-      "temperature_c": 17,
-      "humidity_pct": 72.4,
-      "wind_speed_mps": 0
+      "temperature_c": 22,
+      "humidity_pct": 78.06,
+      "wind_speed_mps": 2.06
     },
     "rockies": {
-      "temperature_c": 21.1,
-      "humidity_pct": 54.97,
-      "wind_speed_mps": 7.7,
-      "water_level_m": 1.5
+      "temperature_c": 22.2,
+      "humidity_pct": 51.39,
+      "wind_speed_mps": 12.4
     },
     "texas": {
-      "temperature_c": 24,
-      "humidity_pct": 100,
+      "temperature_c": 25,
+      "humidity_pct": 94.19,
       "wind_speed_mps": 1.54
     },
     "gulf": {
-      "temperature_c": 27,
-      "humidity_pct": 94.27,
-      "wind_speed_mps": 2.57,
-      "water_level_m": 0.55
+      "temperature_c": 26,
+      "humidity_pct": 94.23,
+      "wind_speed_mps": 2.06,
+      "water_level_m": 0.91
     },
     "southeast": {
       "temperature_c": 28,
-      "humidity_pct": 74.3,
-      "wind_speed_mps": 1.54
+      "humidity_pct": 65.77,
+      "wind_speed_mps": 2.06
     },
     "carolinas": {
-      "temperature_c": 23,
-      "humidity_pct": 94.11,
-      "wind_speed_mps": 3.09
+      "temperature_c": 22,
+      "humidity_pct": 94.06,
+      "wind_speed_mps": 4.12
     },
     "midwest": {
-      "temperature_c": 21,
-      "humidity_pct": 88.35,
-      "wind_speed_mps": 1.54
+      "temperature_c": 23,
+      "humidity_pct": 83.22,
+      "wind_speed_mps": 0
     },
     "plains": {
       "temperature_c": 22,
-      "wind_speed_mps": 1.54
+      "wind_speed_mps": 0
     },
     "uppermidwest": {
-      "temperature_c": 24,
-      "humidity_pct": 73.63,
-      "wind_speed_mps": 3.6
+      "temperature_c": 25,
+      "humidity_pct": 78.5,
+      "wind_speed_mps": 2.06
     },
     "greatlakes": {
-      "temperature_c": 22,
-      "humidity_pct": 68.77,
-      "wind_speed_mps": 0
+      "temperature_c": 25,
+      "humidity_pct": 73.8,
+      "wind_speed_mps": 3.09
     },
     "midatlantic": {
-      "temperature_c": 18,
-      "humidity_pct": 93.88,
-      "wind_speed_mps": 0
+      "temperature_c": 20,
+      "humidity_pct": 82.87,
+      "wind_speed_mps": 2.06
     },
     "northeast": {
-      "temperature_c": 19,
-      "humidity_pct": 68.18,
-      "wind_speed_mps": 2.57,
-      "water_level_m": 0.34
+      "temperature_c": 22,
+      "humidity_pct": 64.5,
+      "wind_speed_mps": 7.72,
+      "water_level_m": 0.32
     }
   }
 }
