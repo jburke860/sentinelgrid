@@ -83,25 +83,29 @@ export function HelpHub({
         aria-modal="true"
         aria-label="Help"
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-edge-soft px-4 py-2.5">
-          <h2 className="font-mono text-sm font-bold tracking-[0.2em]">
+        {/* The wordmark hides below sm so the tabs and the close button always
+            fit a phone-width header (the ✕ used to get clipped off-screen). */}
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-edge-soft px-3 py-2.5 sm:px-4">
+          <h2 className="hidden font-mono text-sm font-bold tracking-[0.2em] sm:block">
             SENTINEL<span className="text-accent">GRID</span>
           </h2>
-          <div className="flex items-center gap-1">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => onTab(t.id)}
-                className={`rounded px-2 py-1 font-mono text-[10px] tracking-wider uppercase transition-colors ${
-                  tab === t.id ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => onTab(t.id)}
+                  className={`shrink-0 whitespace-nowrap rounded px-2 py-1.5 font-mono text-[10px] tracking-wider uppercase transition-colors sm:py-1 ${
+                    t.id === "shortcuts" ? "hidden sm:block" : ""
+                  } ${tab === t.id ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={onClose}
-              className="ml-2 rounded px-2 py-0.5 font-mono text-xs text-ink-dim hover:text-ink"
+              className="ml-1 shrink-0 rounded-md p-2 font-mono text-xs text-ink-dim hover:text-ink sm:ml-2 sm:p-1"
               aria-label="Close help"
             >
               ✕

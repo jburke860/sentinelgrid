@@ -38,6 +38,16 @@ test("console-controls sheet toggles the theme and speed", async ({ page }) => {
   await sheet.getByRole("button", { name: "4x speed" }).click();
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toHaveCount(0);
+  // The help hub opened from the sheet must be dismissable on a phone —
+  // its ✕ once sat clipped off the right edge of the header.
+  await page.getByLabel("Open console controls").click();
+  await sheet.getByRole("button", { name: /Help, feature guide/ }).click();
+  const help = page.getByRole("dialog", { name: "Help" });
+  await expect(help).toBeVisible();
+  const close = help.getByRole("button", { name: "Close help" });
+  await expect(close).toBeInViewport();
+  await close.click();
+  await expect(help).toHaveCount(0);
 });
 
 test("map layers open as a bottom sheet and toggles stick", async ({ page }) => {
