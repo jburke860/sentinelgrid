@@ -307,7 +307,7 @@ export function IncidentQueue({
             className="cursor-pointer space-y-1.5 px-3 py-2.5 transition-colors hover:bg-panel-2/50"
             onClick={() => setExpandedId(expandedId === inc.id ? null : inc.id)}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-mono text-[11px] text-ink-dim">{inc.incidentKey}</span>
               <span title={HAZARDS[inc.hazard].label}><HazardIcon kind={inc.hazard} size={14} /></span>
               <SeverityBadge severity={inc.severity} />

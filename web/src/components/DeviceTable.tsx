@@ -95,7 +95,61 @@ export function DeviceTable({
       {sorted.length === 0 ? (
         <EmptyState>No nodes match the current filter.</EmptyState>
       ) : (
-        <table className="w-full border-collapse text-left text-xs">
+        <>
+        {/* Phone rendering: one card per node — the table's seven columns
+            can't fit 390px without clipping the risk badge. */}
+        <ul className="divide-y divide-edge-soft/60 sm:hidden">
+          {sorted.map((d) => (
+            <li
+              key={d.deviceId}
+              onClick={() => onSelect(d.deviceId)}
+              className={`cursor-pointer px-3 py-2 transition-colors ${
+                d.deviceId === selectedId ? "bg-accent/10" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink">{d.displayName}</span>
+                {d.status === "offline" ? (
+                  <span className="shrink-0 font-mono text-[10px] text-ink-dim">
+                    {d.lastSeenAt ? `last ${fmtTime(d.lastSeenAt)}` : "no data"}
+                  </span>
+                ) : d.latest ? (
+                  <span className="shrink-0">
+                    <RiskBadge level={d.latest.riskLevel} score={d.latest.riskScore} />
+                  </span>
+                ) : null}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onInspect(d.deviceId);
+                  }}
+                  className="shrink-0 rounded border border-edge bg-panel-2 p-1.5 font-mono text-ink-dim"
+                  aria-label={`Open detail for ${d.displayName}`}
+                >
+                  <ChevronRight size={12} aria-hidden />
+                </button>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px] text-ink-dim">
+                <StatusDot status={d.status} />
+                {d.latest && (
+                  <>
+                    <span className={`tnum ${d.latest.batteryPct < 20 ? "text-watch" : ""}`}>
+                      batt {d.latest.batteryPct.toFixed(0)}%
+                    </span>
+                    <span className="tnum">{d.latest.values.temperature_c.toFixed(1)}°C</span>
+                  </>
+                )}
+                <span className="min-w-0 truncate">{d.locality ?? d.deviceId}</span>
+                {showRegion && (
+                  <span className="rounded bg-panel-2 px-1 text-accent/80">
+                    {REGION_BY_ID.get(d.regionId)?.shortName}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <table className="hidden w-full border-collapse text-left text-xs sm:table">
           <thead className="sticky top-0 z-10 bg-panel">
             <tr className="border-b border-edge font-mono text-[10px] tracking-wider text-ink-dim uppercase">
               <th className="px-3 py-1.5 font-medium">Node</th>
@@ -175,6 +229,7 @@ export function DeviceTable({
             ))}
           </tbody>
         </table>
+        </>
       )}
       {tier === "all" && matched > sorted.length && (
         <div className="border-t border-edge-soft px-3 py-1.5 text-center font-mono text-[10px] text-ink-dim">

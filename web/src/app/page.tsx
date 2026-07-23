@@ -398,9 +398,11 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       // Fixed dvh height on phones so the map is a real workspace, not a 20rem strip.
       map: "flex h-[60dvh] lg:h-auto lg:col-span-8 lg:row-span-4",
       incidents: "flex lg:col-span-4 lg:row-span-4",
-      devices: "flex lg:col-span-4 lg:row-span-2",
-      telemetry: "flex lg:col-span-4 lg:row-span-2",
-      anomaly: "flex lg:col-span-4 lg:row-span-2",
+      // Below lg the overview stays map + incidents; the other panels live in
+      // their own tabs, so the phone overview isn't a five-panel scroll.
+      devices: "hidden lg:flex lg:col-span-4 lg:row-span-2",
+      telemetry: "hidden lg:flex lg:col-span-4 lg:row-span-2",
+      anomaly: "hidden lg:flex lg:col-span-4 lg:row-span-2",
     },
     incidents: {
       map: "hidden",
