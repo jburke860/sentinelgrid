@@ -3,7 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import "leaflet.heat";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Layers, Maximize, Minimize } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Layers, Maximize, Minimize, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GeoJSON, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import type { FeedState, Station } from "@/lib/liveFeeds";
@@ -619,7 +619,7 @@ function LayerRow({
       onClick={onToggle}
       title={title ?? `Toggle ${label}`}
       aria-pressed={on}
-      className={`flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left font-mono text-[10px] transition-colors lg:py-1 ${
+      className={`flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left font-mono text-xs transition-colors lg:py-1 lg:text-[10px] ${
         on ? "text-ink" : "text-ink-dim hover:text-ink"
       }`}
     >
@@ -684,6 +684,8 @@ export default function MapView({
     () => (localStorage.getItem("sg-map-basemap") as Basemap) ?? "auto",
   );
   const [panelOpen, setPanelOpen] = useState(true);
+  // Phones get the layer list as a bottom sheet instead of a map-covering panel.
+  const [layersSheet, setLayersSheet] = useState(false);
   const [viewInfo, setViewInfo] = useState({
     lat: initialView.current.center[0],
     lng: initialView.current.center[1],
@@ -791,6 +793,79 @@ export default function MapView({
     ["watch", RISK_COLORS.watch],
     ["normal", RISK_COLORS.normal],
   ];
+
+  // One list of layer rows, rendered in the desktop corner panel and again
+  // inside the phone bottom sheet.
+  const layersContent = (
+    <>
+      <LayerRow
+        label="Risk heat"
+        swatch="#f97316"
+        on={layers.risk}
+        onToggle={() => toggleLayer("risk")}
+        title="Toggle the risk heat layer"
+      />
+      {METRIC_HEAT.map((cfg) => (
+        <LayerRow
+          key={cfg.id}
+          label={cfg.label}
+          swatch={cfg.swatch}
+          on={layers[cfg.id]}
+          onToggle={() => toggleLayer(cfg.id)}
+        />
+      ))}
+      <LayerRow
+        label="Weather radar"
+        swatch="#22c55e"
+        live
+        on={layers.radar}
+        onToggle={() => toggleLayer("radar")}
+        title="Live NEXRAD reflectivity (Iowa Environmental Mesonet)"
+      />
+      <LayerRow label="Incident rings" swatch={RISK_COLORS.critical} on={layers.incidents} onToggle={() => toggleLayer("incidents")} />
+      <LayerRow label="Storm centers" swatch="#8b5cf6" on={layers.epicenters} onToggle={() => toggleLayer("epicenters")} />
+      <LayerRow label="Correlation arcs" swatch="#64748b" on={layers.arcs} onToggle={() => toggleLayer("arcs")} />
+      <div className="mx-1.5 my-1 border-t border-edge-soft" />
+      <LayerRow
+        label="Verified stations"
+        swatch="#64d3e8"
+        live
+        on={layers.stations}
+        onToggle={() => toggleLayer("stations")}
+        title="Real NWS/ASOS + USGS observations (baked snapshot, refreshed by CI)"
+      />
+      <LayerRow
+        label="NWS warnings"
+        swatch="#ef4444"
+        live
+        on={layers.alerts}
+        onToggle={() => toggleLayer("alerts")}
+        title="Live storm-based warning polygons from api.weather.gov"
+      />
+      <LayerRow
+        label="Earthquakes"
+        swatch="#c2703e"
+        live
+        on={layers.quakes}
+        onToggle={() => toggleLayer("quakes")}
+        title="Live USGS earthquakes, past day M2.5+"
+      />
+      <div className="mt-1 flex items-center gap-1 border-t border-edge-soft px-1.5 pt-1.5">
+        <span className="font-mono text-[9px] tracking-wider text-ink-dim uppercase">Base</span>
+        {(["auto", "satellite"] as const).map((b) => (
+          <button
+            key={b}
+            onClick={() => switchBasemap(b)}
+            className={`rounded px-1.5 py-1 font-mono text-[10px] uppercase transition-colors lg:py-0.5 lg:text-[9px] ${
+              basemap === b ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
+            }`}
+          >
+            {b}
+          </button>
+        ))}
+      </div>
+    </>
+  );
 
   return (
     <div ref={wrapRef} className="relative h-full w-full bg-bg">
@@ -1003,91 +1078,54 @@ export default function MapView({
             ]}
       </MapContainer>
 
-      {/* Layers panel */}
-      <div className="absolute top-2 left-2 z-[500] w-44 overflow-hidden rounded-lg border border-edge bg-panel/95 shadow-lg backdrop-blur-sm">
+      {/* Layers: corner panel on desktop; on phones the header is a chip that
+          opens a bottom sheet so the list never covers the map. */}
+      <div className="absolute top-2 left-2 z-[500] overflow-hidden rounded-lg border border-edge bg-panel/95 shadow-lg backdrop-blur-sm lg:w-44">
         <button
-          onClick={() => setPanelOpen(!panelOpen)}
+          onClick={() =>
+            window.matchMedia("(min-width: 1024px)").matches
+              ? setPanelOpen(!panelOpen)
+              : setLayersSheet(true)
+          }
           className="flex w-full items-center gap-1.5 px-2 py-1.5 font-mono text-[10px] font-semibold tracking-widest text-ink-dim uppercase hover:text-ink"
-          aria-expanded={panelOpen}
+          aria-expanded={panelOpen || layersSheet}
         >
           <Layers size={12} aria-hidden /> Map layers
           {panelOpen ? (
-            <ChevronDown size={12} className="ml-auto" aria-hidden />
+            <ChevronDown size={12} className="ml-auto hidden lg:inline" aria-hidden />
           ) : (
-            <ChevronRight size={12} className="ml-auto" aria-hidden />
+            <ChevronRight size={12} className="ml-auto hidden lg:inline" aria-hidden />
           )}
         </button>
         {panelOpen && (
-          <div className="space-y-0.5 border-t border-edge-soft px-1 pt-1 pb-1.5">
-            <LayerRow
-              label="Risk heat"
-              swatch="#f97316"
-              on={layers.risk}
-              onToggle={() => toggleLayer("risk")}
-              title="Toggle the risk heat layer"
-            />
-            {METRIC_HEAT.map((cfg) => (
-              <LayerRow
-                key={cfg.id}
-                label={cfg.label}
-                swatch={cfg.swatch}
-                on={layers[cfg.id]}
-                onToggle={() => toggleLayer(cfg.id)}
-              />
-            ))}
-            <LayerRow
-              label="Weather radar"
-              swatch="#22c55e"
-              live
-              on={layers.radar}
-              onToggle={() => toggleLayer("radar")}
-              title="Live NEXRAD reflectivity (Iowa Environmental Mesonet)"
-            />
-            <LayerRow label="Incident rings" swatch={RISK_COLORS.critical} on={layers.incidents} onToggle={() => toggleLayer("incidents")} />
-            <LayerRow label="Storm centers" swatch="#8b5cf6" on={layers.epicenters} onToggle={() => toggleLayer("epicenters")} />
-            <LayerRow label="Correlation arcs" swatch="#64748b" on={layers.arcs} onToggle={() => toggleLayer("arcs")} />
-            <div className="mx-1.5 my-1 border-t border-edge-soft" />
-            <LayerRow
-              label="Verified stations"
-              swatch="#64d3e8"
-              live
-              on={layers.stations}
-              onToggle={() => toggleLayer("stations")}
-              title="Real NWS/ASOS + USGS observations (baked snapshot, refreshed by CI)"
-            />
-            <LayerRow
-              label="NWS warnings"
-              swatch="#ef4444"
-              live
-              on={layers.alerts}
-              onToggle={() => toggleLayer("alerts")}
-              title="Live storm-based warning polygons from api.weather.gov"
-            />
-            <LayerRow
-              label="Earthquakes"
-              swatch="#c2703e"
-              live
-              on={layers.quakes}
-              onToggle={() => toggleLayer("quakes")}
-              title="Live USGS earthquakes, past day M2.5+"
-            />
-            <div className="mt-1 flex items-center gap-1 border-t border-edge-soft px-1.5 pt-1.5">
-              <span className="font-mono text-[9px] tracking-wider text-ink-dim uppercase">Base</span>
-              {(["auto", "satellite"] as const).map((b) => (
-                <button
-                  key={b}
-                  onClick={() => switchBasemap(b)}
-                  className={`rounded px-1.5 py-0.5 font-mono text-[9px] uppercase transition-colors ${
-                    basemap === b ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
-                  }`}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
+          <div className="hidden space-y-0.5 border-t border-edge-soft px-1 pt-1 pb-1.5 lg:block">
+            {layersContent}
           </div>
         )}
       </div>
+
+      {/* Phone layers bottom sheet */}
+      {layersSheet && (
+        <div className="fixed inset-0 z-[1250] lg:hidden" role="dialog" aria-modal="true" aria-label="Map layers">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setLayersSheet(false)} />
+          <div className="slide-up absolute inset-x-0 bottom-0 max-h-[75dvh] overflow-y-auto rounded-t-2xl border-t border-edge bg-panel px-3 pt-2.5 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-edge" aria-hidden />
+            <div className="mb-1 flex items-center justify-between px-1">
+              <span className="font-mono text-[11px] font-semibold tracking-widest text-ink-dim uppercase">
+                Map layers
+              </span>
+              <button
+                onClick={() => setLayersSheet(false)}
+                aria-label="Close"
+                className="rounded-md p-1.5 text-ink-dim hover:text-ink"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+            <div className="space-y-0.5">{layersContent}</div>
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen */}
       <button
@@ -1099,8 +1137,9 @@ export default function MapView({
         {fullscreen ? <Minimize size={14} aria-hidden /> : <Maximize size={14} aria-hidden />}
       </button>
 
-      {/* Risk legend */}
-      <div className="absolute bottom-7 left-2 z-[500] flex items-center gap-2 rounded-md border border-edge bg-panel/90 px-2 py-1 shadow-lg">
+      {/* Risk legend (desktop only — collides with the wrapped attribution on phones,
+          and the same colors are on every node badge) */}
+      <div className="absolute bottom-7 left-2 z-[500] hidden items-center gap-2 rounded-md border border-edge bg-panel/90 px-2 py-1 shadow-lg lg:flex">
         <span className="font-mono text-[9px] tracking-wider text-ink-dim uppercase">Risk</span>
         {legend.map(([label, color]) => (
           <span key={label} className="inline-flex items-center gap-1 font-mono text-[9px] text-ink-dim">
@@ -1110,8 +1149,8 @@ export default function MapView({
         ))}
       </div>
 
-      {/* Coordinates + zoom readout */}
-      <div className="tnum absolute right-2 bottom-7 z-[500] rounded-md border border-edge bg-panel/90 px-2 py-1 font-mono text-[9px] text-ink-dim shadow-lg">
+      {/* Coordinates + zoom readout (desktop only — noise at phone width) */}
+      <div className="tnum absolute right-2 bottom-7 z-[500] hidden rounded-md border border-edge bg-panel/90 px-2 py-1 font-mono text-[9px] text-ink-dim shadow-lg lg:block">
         {Math.abs(viewInfo.lat).toFixed(2)}°{viewInfo.lat >= 0 ? "N" : "S"} {Math.abs(viewInfo.lng).toFixed(2)}°
         {viewInfo.lng >= 0 ? "E" : "W"} · z{viewInfo.zoom.toFixed(1)}
       </div>

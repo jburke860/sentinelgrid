@@ -395,7 +395,8 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   // panel(s) show; on lg the view arranges its panel set across the 12-col grid.
   const LAYOUTS: Record<View, Record<string, string>> = {
     overview: {
-      map: "flex lg:col-span-8 lg:row-span-4",
+      // Fixed dvh height on phones so the map is a real workspace, not a 20rem strip.
+      map: "flex h-[60dvh] lg:h-auto lg:col-span-8 lg:row-span-4",
       incidents: "flex lg:col-span-4 lg:row-span-4",
       devices: "flex lg:col-span-4 lg:row-span-2",
       telemetry: "flex lg:col-span-4 lg:row-span-2",
