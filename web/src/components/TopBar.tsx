@@ -1,12 +1,14 @@
 "use client";
 
-import { Bell, BellOff, Database, Info, Moon, Pause, Play, RotateCcw, Search, Sun } from "lucide-react";
+import { Bell, BellOff, Database, Info, Moon, Pause, Play, RotateCcw, Search, SlidersHorizontal, Sun } from "lucide-react";
 import Image from "next/image";
+import { useState } from "react";
 import logo from "@/app/logo.png";
 import { HAZARDS } from "@/lib/sim/hazards";
 import { STORYLINES } from "@/lib/sim/storylines";
 import type { DataEngine, HazardKind, ScenarioKind, SimSnapshot } from "@/lib/sim/types";
 import { HazardIcon } from "./icons";
+import { MobileControlsSheet } from "./MobileControlsSheet";
 import { SavedViews } from "./SavedViews";
 import { CtrlButton, Kbd } from "./ui";
 
@@ -38,13 +40,14 @@ export function TopBar({
     ? region.hazards
     : ([...new Set(snap.regions.flatMap((r) => r.hazards))] as HazardKind[]);
   const activeHazards = snap.scenarios.filter((s) => s.kind !== "dropout");
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     // Rendered inside the page-level <header> together with the KPI strip.
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge bg-panel px-3 py-2 sm:px-4">
       <div className="flex items-center gap-2.5">
         <Image src={logo} alt="SentinelGrid" width={30} height={30} priority className="rounded-md shadow-sm" />
-        <h1 className="font-mono text-base font-bold tracking-[0.2em] text-brand">
+        <h1 className="font-mono text-sm font-bold tracking-[0.15em] text-brand lg:text-base lg:tracking-[0.2em]">
           SENTINEL<span className="text-accent">GRID</span>
         </h1>
         <span className="hidden text-[11px] text-ink-dim 2xl:inline">national edge telemetry ops console</span>
@@ -53,7 +56,7 @@ export function TopBar({
       <select
         value={regionId ?? ""}
         onChange={(e) => onSelectRegion(e.target.value || null)}
-        className="rounded-md border border-edge bg-panel-2 px-2 py-1 font-mono text-[11px] text-ink hover:border-accent/40"
+        className="min-w-0 flex-1 rounded-md border border-edge bg-panel-2 px-2 py-1 font-mono text-[11px] text-ink hover:border-accent/40 lg:flex-none"
         aria-label="Region"
       >
         <option value="">National overview</option>
@@ -64,7 +67,7 @@ export function TopBar({
         ))}
       </select>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="hidden flex-wrap items-center gap-1.5 lg:flex">
         {snap.storyline && (
           <button
             onClick={() => engine.playStoryline(null)}
@@ -89,7 +92,39 @@ export function TopBar({
         ))}
       </div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+      {/* Phone header: search + a bottom sheet holding everything else. */}
+      <div className="flex shrink-0 items-center gap-1.5 lg:hidden">
+        <button
+          onClick={onOpenPalette}
+          aria-label="Search nodes, regions, incidents, actions"
+          className="rounded-md border border-edge bg-panel-2 p-2 text-ink-dim transition-colors active:scale-95"
+        >
+          <Search size={15} aria-hidden />
+        </button>
+        <button
+          onClick={() => setSheetOpen(true)}
+          aria-label="Open console controls"
+          aria-expanded={sheetOpen}
+          className="rounded-md border border-edge bg-panel-2 p-2 text-ink-dim transition-colors active:scale-95"
+        >
+          <SlidersHorizontal size={15} aria-hidden />
+        </button>
+      </div>
+      {sheetOpen && (
+        <MobileControlsSheet
+          engine={engine}
+          snap={snap}
+          regionId={regionId}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          alertsOn={alertsOn}
+          onToggleAlerts={onToggleAlerts}
+          onOpenHelp={onOpenAbout}
+          onClose={() => setSheetOpen(false)}
+        />
+      )}
+
+      <div className="ml-auto hidden flex-wrap items-center gap-1.5 lg:flex">
         <button
           onClick={onOpenPalette}
           title="Search nodes, regions, incidents, actions (⌘K)"

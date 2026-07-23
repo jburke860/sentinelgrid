@@ -49,7 +49,7 @@ function KpiCard({
   sparkColor?: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2.5 rounded-lg border border-edge-soft bg-panel px-2.5 py-1.5">
+    <div className="flex shrink-0 snap-start items-center gap-2.5 rounded-lg border border-edge-soft bg-panel px-2.5 py-1.5">
       <div>
         <div className="font-mono text-[9px] tracking-widest text-ink-dim uppercase">{label}</div>
         <div className={`tnum font-mono text-sm font-bold leading-tight ${tone ?? "text-ink"}`}>{value}</div>
@@ -92,7 +92,10 @@ export function KpiStrip({
   const peakTone = peak >= 75 ? "text-crit" : peak >= 50 ? "text-warn" : peak >= 25 ? "text-watch" : "text-ok";
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto border-b border-edge bg-panel-2/50 px-3 py-1.5 sm:px-4">
+    // Relative wrapper so the phone-only edge fade can hint at more cards
+    // off-screen; snap scrolling keeps a card from resting half-clipped.
+    <div className="relative border-b border-edge bg-panel-2/50">
+    <div className="flex snap-x items-center gap-2 overflow-x-auto px-3 py-1.5 sm:px-4 lg:snap-none">
       <KpiCard
         label="Active nodes"
         value={
@@ -130,7 +133,7 @@ export function KpiStrip({
           <button
             key={kind}
             onClick={() => onSelectRegion(regionId)}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-edge-soft bg-panel px-2 py-1.5 transition-colors hover:border-accent/40"
+            className="flex shrink-0 snap-start items-center gap-1.5 rounded-lg border border-edge-soft bg-panel px-2 py-1.5 transition-colors hover:border-accent/40"
             title={`${count} node${count === 1 ? "" : "s"} elevated for ${HAZARDS[kind].label} — jump to region`}
           >
             <HazardIcon kind={kind} size={14} />
@@ -147,6 +150,11 @@ export function KpiStrip({
       <span className="tnum ml-auto hidden shrink-0 font-mono text-[11px] text-ink-dim md:block">
         {snap.mode === "sim" ? "SIM" : "LIVE"} {fmtClock(snap.simTime)}
       </span>
+    </div>
+    <div
+      className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-bg to-transparent lg:hidden"
+      aria-hidden
+    />
     </div>
   );
 }

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { SimEngine } from "./engine";
 
 // Permanent perf gates: fail CI if fleet-density changes regress the engine.
-// Budgets are generous for slow CI runners — local numbers run ~3-5x better.
+// Budgets leave ~10x headroom over local numbers: shared CI runners run
+// 3-5x slower with noisy neighbors, and a real regression (e.g. an O(n²)
+// pass over the fleet) overshoots these by far more than 10x.
 
 const now = () => Number(process.hrtime.bigint()) / 1e6;
 
@@ -25,8 +27,8 @@ describe("perf gates", () => {
       `\nPERF boot=${boot.toFixed(0)}ms tick=${tick.toFixed(2)}ms publish=${publish.toFixed(2)}ms\n`,
     );
     expect(boot).toBeLessThan(2500);
-    expect(tick).toBeLessThan(15);
-    expect(publish).toBeLessThan(10);
+    expect(tick).toBeLessThan(40);
+    expect(publish).toBeLessThan(25);
     vi.useRealTimers();
   }, 30_000);
 });

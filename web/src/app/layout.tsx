@@ -30,6 +30,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#eef2f6",
+  // Lets bottom sheets pad around the iPhone home indicator via env(safe-area-inset-*).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

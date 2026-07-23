@@ -249,6 +249,21 @@ input[type="range"].scrubber::-moz-range-thumb {
   animation: slide-in-right 0.2s ease-out;
 }
 
+@keyframes slide-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.slide-up {
+  animation: slide-up 0.22s ease-out;
+}
+
 /* Sparklines draw themselves in on mount. */
 @keyframes spark-draw {
   to {

@@ -32,7 +32,7 @@ export function TimeScrubber({
       className={
         docked
           ? "flex shrink-0 items-center gap-2 rounded-xl border border-edge bg-panel/90 px-3 py-1.5 shadow-lg backdrop-blur-sm"
-          : "flex shrink-0 items-center gap-3 border-t border-edge bg-panel px-4 py-2"
+          : "flex shrink-0 items-center gap-3 border-t border-edge bg-panel px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
       }
     >
       {JUMPS.map((j) => {

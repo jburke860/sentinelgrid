@@ -496,7 +496,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           <button
             key={t.id}
             onClick={() => setView(t.id)}
-            className={`flex-1 rounded-md px-2 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+            className={`flex-1 rounded-md px-2 py-2 font-mono text-[11px] uppercase tracking-wider transition-colors ${
               view === t.id ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"
             }`}
           >
