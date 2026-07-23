@@ -1155,9 +1155,10 @@ export default function MapView({
         {viewInfo.lng >= 0 ? "E" : "W"} · z{viewInfo.zoom.toFixed(1)}
       </div>
 
-      {/* Docked playback scrubber */}
+      {/* Docked playback scrubber — hugs the map bottom on phones (no legend
+          or coords down there below lg), floats above them on desktop. */}
       {scrubber && (
-        <div className="absolute bottom-14 left-1/2 z-[500] w-[min(720px,94%)] -translate-x-1/2">{scrubber}</div>
+        <div className="absolute bottom-8 left-1/2 z-[500] w-[min(720px,94%)] -translate-x-1/2 lg:bottom-14">{scrubber}</div>
       )}
     </div>
   );

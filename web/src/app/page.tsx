@@ -419,11 +419,15 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
   // Per-view grid placement for each panel. Below lg only the view's primary
   // panel(s) show; on lg the view arranges its panel set across the 12-col grid.
+  // Below lg the main area is a flex column and every visible panel carries an
+  // explicit height (panels scroll internally). Grid auto-rows can't be
+  // trusted here: Chrome resolves minmax(20rem,auto) rows to an equal split,
+  // letting a 60dvh map overflow its row and paint over the next panel.
   const LAYOUTS: Record<View, Record<string, string>> = {
     overview: {
       // Fixed dvh height on phones so the map is a real workspace, not a 20rem strip.
-      map: "flex h-[60dvh] lg:h-auto lg:col-span-8 lg:row-span-4",
-      incidents: "flex lg:col-span-4 lg:row-span-4",
+      map: "flex h-[60dvh] shrink-0 lg:h-auto lg:col-span-8 lg:row-span-4",
+      incidents: "flex h-[30rem] shrink-0 lg:h-auto lg:col-span-4 lg:row-span-4",
       // Below lg the overview stays map + incidents; the other panels live in
       // their own tabs, so the phone overview isn't a five-panel scroll.
       devices: "hidden lg:flex lg:col-span-4 lg:row-span-2",
@@ -432,24 +436,24 @@ function Dashboard({ engine }: { engine: DataEngine }) {
     },
     incidents: {
       map: "hidden",
-      incidents: "flex lg:col-span-8 lg:row-span-6",
+      incidents: "flex h-[34rem] shrink-0 lg:h-auto lg:col-span-8 lg:row-span-6",
       devices: "hidden",
       telemetry: "hidden",
-      anomaly: "flex lg:col-span-4 lg:row-span-3",
+      anomaly: "flex h-[26rem] shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3",
     },
     nodes: {
       map: "hidden",
       incidents: "hidden",
-      devices: "flex lg:col-span-8 lg:row-span-6",
-      telemetry: "flex lg:col-span-4 lg:row-span-3",
-      anomaly: "flex lg:col-span-4 lg:row-span-3",
+      devices: "flex h-[34rem] shrink-0 lg:h-auto lg:col-span-8 lg:row-span-6",
+      telemetry: "flex h-[26rem] shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3",
+      anomaly: "flex h-[26rem] shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3",
     },
     analytics: {
       map: "hidden",
       incidents: "hidden",
       devices: "hidden",
-      telemetry: "flex lg:col-span-7 lg:row-span-3",
-      anomaly: "flex lg:col-span-4 lg:row-span-3",
+      telemetry: "flex h-[26rem] shrink-0 lg:h-auto lg:col-span-7 lg:row-span-3",
+      anomaly: "flex h-[26rem] shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3",
     },
   };
   const panelClass = (panel: string) => LAYOUTS[view][panel];
@@ -547,7 +551,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       ) : (
       <div className="flex min-h-0 flex-1">
       <SideRail view={view} onChange={setView} openIncidents={openCount} onOpenAbout={() => setHelpTab("about")} />
-      <main id="main" className="grid min-h-0 flex-1 auto-rows-[minmax(20rem,auto)] grid-cols-1 gap-2 overflow-y-auto p-2 lg:auto-rows-fr lg:grid-cols-12 lg:grid-rows-6 lg:overflow-hidden">
+      <main id="main" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:grid lg:auto-rows-fr lg:grid-cols-12 lg:grid-rows-6 lg:overflow-hidden">
         <div data-panel="map" className={`${panelClass("map")} min-h-0`}>
           <ErrorBoundary label="Map">
             <Panel
@@ -627,7 +631,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         </div>
 
         {view === "analytics" && (
-          <div data-panel="fingerprint" className="flex min-h-0 lg:col-span-5 lg:row-span-3">
+          <div data-panel="fingerprint" className="flex h-[30rem] min-h-0 shrink-0 lg:h-auto lg:col-span-5 lg:row-span-3">
             <ErrorBoundary label="Anomaly fingerprint">
               <FingerprintPanel accent="#06b6d4" device={fingerprintDevice} auto={!selected} />
             </ErrorBoundary>
@@ -635,7 +639,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         )}
 
         {view === "incidents" && (
-          <div className="flex min-h-0 lg:col-span-4 lg:row-span-3">
+          <div className="flex h-[26rem] min-h-0 shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3">
             <ErrorBoundary label="Situation summary">
               <SituationSummary
                 accent="#8b5cf6"
@@ -655,12 +659,12 @@ function Dashboard({ engine }: { engine: DataEngine }) {
 
         {view === "analytics" && (
           <>
-            <div className="flex min-h-0 lg:col-span-4 lg:row-span-3">
+            <div className="flex h-[26rem] min-h-0 shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3">
               <ErrorBoundary label="Forecast outlook">
                 <ForecastPanel accent="#0ea5e9" snap={snap} device={fingerprintDevice} />
               </ErrorBoundary>
             </div>
-            <div className="flex min-h-0 lg:col-span-4 lg:row-span-3">
+            <div className="flex h-[26rem] min-h-0 shrink-0 lg:h-auto lg:col-span-4 lg:row-span-3">
               <ErrorBoundary label="Model confidence">
                 <ModelConfidence accent="#10b981" snap={snap} />
               </ErrorBoundary>

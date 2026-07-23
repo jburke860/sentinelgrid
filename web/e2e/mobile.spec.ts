@@ -56,6 +56,14 @@ test("map layers open as a bottom sheet and toggles stick", async ({ page }) => 
 test("overview keeps two panels; nodes view renders cards, not the table", async ({ page }) => {
   await ready(page);
   await expect(page.locator("main section.sg-panel:visible")).toHaveCount(2);
+  // The map must never paint over the incident queue (grid auto-rows once
+  // resolved to an equal split, letting the 60dvh map overflow its row).
+  const gap = await page.evaluate(() => {
+    const map = document.querySelector('[data-panel="map"]')!.getBoundingClientRect();
+    const inc = document.querySelector('[data-panel="incidents"]')!.getBoundingClientRect();
+    return Math.round(inc.top - map.bottom);
+  });
+  expect(gap, "map overlaps the incident queue").toBeGreaterThanOrEqual(0);
   await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Nodes" }).click();
   // Card rows carry the batt/temp secondary line; the 7-col table stays hidden.
   await expect(page.getByText(/batt \d+%/).first()).toBeVisible({ timeout: 10_000 });
