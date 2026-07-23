@@ -159,6 +159,20 @@ function Dashboard({ engine }: { engine: DataEngine }) {
   const [demoStep, setDemoStep] = useState(0);
   const [demoTotal, setDemoTotal] = useState(0);
   const demoTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  // Touch wording for demo/nudge copy ("tap" instead of "press ⌘K").
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  // Phones scroll the panel a demo step is talking about into view; the
+  // desktop grid shows everything at once, so it opts out.
+  const scrollPanel = (panel: string) => {
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    demoTimers.current.push(
+      setTimeout(() => {
+        document
+          .querySelector(`[data-panel="${panel}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 350),
+    );
+  };
   const stopDemo = () => {
     for (const t of demoTimers.current) clearTimeout(t);
     demoTimers.current = [];
@@ -175,6 +189,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           setViewTime(null);
           setView("overview");
           selectRegion(null);
+          scrollPanel("map");
         },
       },
       {
@@ -183,6 +198,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         run: () => {
           engine.trigger("hurricane", "gulf");
           selectRegion("gulf");
+          scrollPanel("map");
         },
       },
       {
@@ -198,17 +214,24 @@ function Dashboard({ engine }: { engine: DataEngine }) {
               .sort((a, b) => (b.latest?.riskScore ?? 0) - (a.latest?.riskScore ?? 0))[0];
           const top = hottest(s.devices) ?? hottest(s.mesh);
           if (top) selectDevice(top.deviceId);
+          scrollPanel("map");
         },
       },
       {
         text: "Sustained anomalies open incidents. The queue triages them: acknowledge, investigate, resolve — with playbooks in the situation summary.",
         hold: 9000,
-        run: () => setView("incidents"),
+        run: () => {
+          setView("incidents");
+          scrollPanel("incidents");
+        },
       },
       {
         text: "Analytics: the anomaly fingerprint matches the hurricane's signature, and the forecast projects its decay — every number derives from the model.",
         hold: 11000,
-        run: () => setView("analytics"),
+        run: () => {
+          setView("analytics");
+          scrollPanel("fingerprint");
+        },
       },
       {
         text: "And every moment replays: scrubbing back reconstructs all 4,000 mesh nodes deterministically — no stored history.",
@@ -217,10 +240,13 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           setView("overview");
           const s = engine.getSnapshot();
           setViewTime(Math.max(s.historyStart, s.simTime - 30 * 60_000));
+          scrollPanel("map");
         },
       },
       {
-        text: "Back live. Press ⌘K to explore everything else — enjoy!",
+        text: coarsePointer
+          ? "Back live. Tap the search button up top to explore everything else — enjoy!"
+          : "Back live. Press ⌘K to explore everything else — enjoy!",
         hold: 6000,
         run: () => setViewTime(null),
       },
@@ -522,7 +548,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       <div className="flex min-h-0 flex-1">
       <SideRail view={view} onChange={setView} openIncidents={openCount} onOpenAbout={() => setHelpTab("about")} />
       <main id="main" className="grid min-h-0 flex-1 auto-rows-[minmax(20rem,auto)] grid-cols-1 gap-2 overflow-y-auto p-2 lg:auto-rows-fr lg:grid-cols-12 lg:grid-rows-6 lg:overflow-hidden">
-        <div className={`${panelClass("map")} min-h-0`}>
+        <div data-panel="map" className={`${panelClass("map")} min-h-0`}>
           <ErrorBoundary label="Map">
             <Panel
               title={`Live Fleet Map — ${regionName}${frozen ? " (playback)" : ""}`}
@@ -557,7 +583,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
           </ErrorBoundary>
         </div>
 
-        <div className={`${panelClass("incidents")} min-h-0`}>
+        <div data-panel="incidents" className={`${panelClass("incidents")} min-h-0`}>
           <ErrorBoundary label="Incident queue">
             <IncidentQueue
               accent="#ef4444"
@@ -601,7 +627,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
         </div>
 
         {view === "analytics" && (
-          <div className="flex min-h-0 lg:col-span-5 lg:row-span-3">
+          <div data-panel="fingerprint" className="flex min-h-0 lg:col-span-5 lg:row-span-3">
             <ErrorBoundary label="Anomaly fingerprint">
               <FingerprintPanel accent="#06b6d4" device={fingerprintDevice} auto={!selected} />
             </ErrorBoundary>
@@ -733,13 +759,26 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       {nudge && !demoText && (
         <div className="fade-up fixed bottom-20 left-1/2 z-[1200] flex -translate-x-1/2 items-center gap-2 rounded-full border border-edge bg-panel/95 py-1.5 pr-2 pl-4 shadow-xl backdrop-blur-sm">
           <span className="text-xs text-ink-dim">
-            New here? Press <span className="font-mono text-accent">?</span> for the feature guide
+            {coarsePointer ? (
+              <>New here? Take the 60-second feature tour</>
+            ) : (
+              <>
+                New here? Press <span className="font-mono text-accent">?</span> for the feature guide
+              </>
+            )}
           </span>
           <button
-            onClick={() => setHelpTab("features")}
+            onClick={() => {
+              if (coarsePointer) {
+                dismissNudge();
+                startDemo();
+              } else {
+                setHelpTab("features");
+              }
+            }}
             className="rounded-full bg-accent/15 px-2.5 py-1 font-mono text-[10px] text-accent hover:bg-accent/25"
           >
-            open
+            {coarsePointer ? "start" : "open"}
           </button>
           <button
             onClick={dismissNudge}
