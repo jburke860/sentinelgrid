@@ -26,7 +26,7 @@ blended with the simulation.
 | Real-data feeds | `web/src/lib/liveFeeds.ts`, `web/scripts/fetch-stations.mjs` | Bulk NWS/USGS ingestion, honest partial scoring, graceful degradation |
 | Map at scale | `web/src/components/MapView.tsx` | Shared-canvas dot rendering with viewport culling, zoom-driven region sync, point-in-polygon alert hit-testing |
 | Backend | `api/`, `worker/`, `edge-sim/` | FastAPI ingest + SSE, Python scoring/rollups/archival (z-score + IsolationForest), C++ publisher |
-| Tests | `web/src/lib/sim/*.test.ts`, `web/e2e/` | 27 unit (incl. perf gates) + 12 Playwright e2e |
+| Tests | `web/src/lib/sim/*.test.ts`, `web/e2e/` | 27 unit (incl. perf gates) + 17 Playwright e2e (12 desktop, 5 mobile) |
 
 ## Five design decisions worth interrogating
 
@@ -93,6 +93,6 @@ blended with the simulation.
 
 ```sh
 cd web && npm install && npm run dev   # dashboard, sim mode
-npm test && npx playwright test        # 27 unit + 12 e2e
+npm test && npx playwright test        # 27 unit + 17 e2e (desktop + mobile projects)
 make stack-up && make bridge-run       # full backend stack (Docker)
 ```

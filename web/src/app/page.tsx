@@ -520,7 +520,7 @@ function Dashboard({ engine }: { engine: DataEngine }) {
       </header>
 
       {/* Mobile view switcher: below lg the side rail collapses into tabs. */}
-      <nav className="flex shrink-0 gap-1 border-b border-edge bg-panel px-2 py-1.5 lg:hidden">
+      <nav aria-label="Views" className="flex shrink-0 gap-1 border-b border-edge bg-panel px-2 py-1.5 lg:hidden">
         {views.map((t) => (
           <button
             key={t.id}
