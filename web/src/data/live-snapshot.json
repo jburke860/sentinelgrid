@@ -1,102 +1,102 @@
 {
-  "fetchedAt": "2026-09-25T10:57:48.786Z",
+  "fetchedAt": "2026-09-26T10:38:36.857Z",
   "regions": {
     "socal": {
       "temperature_c": 20,
       "humidity_pct": 93.97,
-      "wind_speed_mps": 3.09
+      "wind_speed_mps": 2.57,
+      "water_level_m": 0.23
     },
     "norcal": {
-      "temperature_c": 17,
-      "humidity_pct": 93.84
+      "temperature_c": 14,
+      "humidity_pct": 87.75
     },
     "pnw": {
-      "temperature_c": 12.2,
-      "humidity_pct": 96.76,
-      "wind_speed_mps": 0,
-      "water_level_m": 0.66
+      "temperature_c": 9,
+      "humidity_pct": 93.45,
+      "wind_speed_mps": 2.57,
+      "water_level_m": 0.99
     },
     "southwest": {
-      "temperature_c": 23,
-      "humidity_pct": 68.97,
-      "wind_speed_mps": 1.54
+      "temperature_c": 27,
+      "humidity_pct": 50.99,
+      "wind_speed_mps": 2.06
     },
     "mountainwest": {
-      "temperature_c": 15,
-      "humidity_pct": 51.21,
-      "wind_speed_mps": 3.6
+      "temperature_c": 17,
+      "humidity_pct": 48.31,
+      "wind_speed_mps": 3.09
     },
     "northrockies": {
       "temperature_c": 14,
-      "humidity_pct": 58.55,
-      "wind_speed_mps": 0
-    },
-    "appalachia": {
-      "temperature_c": 11,
-      "humidity_pct": 100,
-      "wind_speed_mps": 2.57
-    },
-    "newengland": {
-      "temperature_c": 9,
-      "humidity_pct": 87.29,
-      "wind_speed_mps": 2.06
-    },
-    "rockies": {
-      "temperature_c": 11,
-      "humidity_pct": 100,
-      "wind_speed_mps": 1.54,
-      "water_level_m": 1.51
-    },
-    "texas": {
-      "temperature_c": 23,
-      "humidity_pct": 94.11,
-      "wind_speed_mps": 0
-    },
-    "gulf": {
-      "temperature_c": 26,
-      "humidity_pct": 61.39,
-      "wind_speed_mps": 5.14,
-      "water_level_m": 0.58
-    },
-    "southeast": {
-      "temperature_c": 26,
-      "humidity_pct": 83.57,
+      "humidity_pct": 50.94,
       "wind_speed_mps": 4.12
     },
-    "carolinas": {
-      "temperature_c": 11,
-      "humidity_pct": 87.48,
-      "wind_speed_mps": 3.09
+    "appalachia": {
+      "temperature_c": 9,
+      "humidity_pct": 100,
+      "wind_speed_mps": 0
     },
-    "midwest": {
-      "temperature_c": 16,
-      "humidity_pct": 93.79,
+    "newengland": {
+      "temperature_c": 15,
+      "humidity_pct": 62.95,
+      "wind_speed_mps": 4.63
+    },
+    "rockies": {
+      "temperature_c": 13,
+      "humidity_pct": 66.93,
+      "wind_speed_mps": 5.14,
+      "water_level_m": 1.44
+    },
+    "texas": {
+      "temperature_c": 24,
+      "humidity_pct": 83.34,
+      "wind_speed_mps": 1.54
+    },
+    "gulf": {
+      "temperature_c": 23,
+      "humidity_pct": 73.46,
+      "wind_speed_mps": 2.06,
+      "water_level_m": 0.47
+    },
+    "southeast": {
+      "temperature_c": 24,
+      "humidity_pct": 88.6,
       "wind_speed_mps": 2.06
     },
+    "carolinas": {
+      "temperature_c": 9,
+      "humidity_pct": 93.45,
+      "wind_speed_mps": 2.06
+    },
+    "midwest": {
+      "temperature_c": 17,
+      "humidity_pct": 67.77,
+      "wind_speed_mps": 2.57
+    },
     "plains": {
-      "temperature_c": 21,
+      "temperature_c": 22,
       "wind_speed_mps": 5.14
     },
     "uppermidwest": {
-      "temperature_c": 15,
-      "humidity_pct": 87.84,
-      "wind_speed_mps": 3.09
+      "temperature_c": 14,
+      "humidity_pct": 93.7,
+      "wind_speed_mps": 4.12
     },
     "greatlakes": {
-      "temperature_c": 16,
-      "humidity_pct": 77.16,
-      "wind_speed_mps": 3.09
+      "temperature_c": 12,
+      "humidity_pct": 81.88,
+      "wind_speed_mps": 0
     },
     "midatlantic": {
-      "temperature_c": 13,
-      "humidity_pct": 62.48,
-      "wind_speed_mps": 4.63
+      "temperature_c": 17,
+      "humidity_pct": 55.4,
+      "wind_speed_mps": 6.69
     },
     "northeast": {
-      "temperature_c": 11,
-      "humidity_pct": 71.28,
-      "wind_speed_mps": 5.66,
-      "water_level_m": 0.22
+      "temperature_c": 13,
+      "wind_speed_mps": 8.75,
+      "water_level_m": 0.21
     }
   }
 }
