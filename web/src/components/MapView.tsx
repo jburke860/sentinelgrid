@@ -25,6 +25,10 @@ const ADOPT_RADIUS_DEG = 4;
 
 // Live NEXRAD composite reflectivity, refreshed server-side every ~5 minutes.
 const RADAR_URL = "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png";
+// CARTO's legacy public basemap endpoints now return an "API KEY REQUIRED"
+// tile for this app. OpenStreetMap keeps the dashboard keyless and is suitable
+// for the default operational map; satellite remains an explicit Esri option.
+const BASEMAP_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const SATELLITE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
@@ -883,14 +887,12 @@ export default function MapView({
           url={
             basemap === "satellite"
               ? SATELLITE_URL
-              : theme === "dark"
-                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              : BASEMAP_URL
           }
           attribution={
             basemap === "satellite"
               ? "Tiles &copy; Esri"
-              : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }
         />
         {layers.radar && (

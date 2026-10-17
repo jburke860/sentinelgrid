@@ -6,8 +6,9 @@
 import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
 
+const BASEMAP_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
 export default function MiniMap({ lat, lon, color }: { lat: number; lon: number; color: string }) {
-  const dark = typeof document !== "undefined" && document.documentElement.dataset.theme === "dark";
   return (
     <div className="pointer-events-none h-28 overflow-hidden rounded-md border border-edge-soft">
       <MapContainer
@@ -23,11 +24,8 @@ export default function MiniMap({ lat, lon, color }: { lat: number; lon: number;
         className="z-0 h-full w-full"
       >
         <TileLayer
-          url={
-            dark
-              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          }
+          url={BASEMAP_URL}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         <CircleMarker
           center={[lat, lon]}
